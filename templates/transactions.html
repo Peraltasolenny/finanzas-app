@@ -1,9 +1,47 @@
 {% extends "base.html" %}
 {% block title %}Transacciones{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-  <h4 class="mb-0 page-title">Transacciones — {{ mes_nombre }} {{ year }}</h4>
-  {% include "_period.html" %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h4 class="mb-0 page-title">Transacciones{% if not rango_activo %} — {{ mes_nombre }} {{ year }}{% endif %}</h4>
+  {% if not rango_activo %}{% include "_period.html" %}{% endif %}
+</div>
+
+{# Filtro por rango de fechas #}
+<div class="card shadow-sm mb-3"><div class="card-body py-2">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-auto">
+      <label class="form-label small mb-0">Desde</label>
+      <input type="date" name="desde" value="{{ desde }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-auto">
+      <label class="form-label small mb-0">Hasta</label>
+      <input type="date" name="hasta" value="{{ hasta }}" class="form-control form-control-sm">
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-sm btn-dark">Filtrar por rango</button>
+    </div>
+    {% if rango_activo %}
+    <div class="col-auto">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.transactions') }}">Limpiar</a>
+    </div>
+    {% endif %}
+  </form>
+</div></div>
+
+{# Totales del conjunto mostrado #}
+<div class="row g-3 mb-3">
+  <div class="col-4"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-in"></span> Ingresos</div>
+    <div class="fw-bold txt-in">{{ money(total_ingresos) }}</div>
+  </div></div></div>
+  <div class="col-4"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-out"></span> Gastos</div>
+    <div class="fw-bold txt-out">{{ money(total_gastos) }}</div>
+  </div></div></div>
+  <div class="col-4"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-net"></span> Neto</div>
+    <div class="fw-bold {{ 'txt-net' if neto >= 0 else 'txt-out' }}">{{ money(neto) }}</div>
+  </div></div></div>
 </div>
 
 <div class="row g-3">

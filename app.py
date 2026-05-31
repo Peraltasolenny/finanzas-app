@@ -33,10 +33,11 @@ def create_app(config_class=Config):
 
         return {"money": money, "currency": currency}
 
-    # Crear las tablas si no existen
+    # Crear las tablas si no existen y aplicar migración ligera de columnas nuevas
     with app.app_context():
         import models  # noqa: F401  (registra los modelos)
         db.create_all()
+        models.ensure_schema()
 
     return app
 

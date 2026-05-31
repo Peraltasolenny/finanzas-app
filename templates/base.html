@@ -32,17 +32,21 @@
       <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.dashboard' }}" href="{{ url_for('main.dashboard') }}">Resumen</a></li>
         <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.transactions' }}" href="{{ url_for('main.transactions') }}">Transacciones</a></li>
+        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.import_statement' }}" href="{{ url_for('main.import_statement') }}">Importar</a></li>
         <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.budget' }}" href="{{ url_for('main.budget') }}">Presupuesto</a></li>
         <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.goals' }}" href="{{ url_for('main.goals') }}">Metas</a></li>
         <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.debts' }}" href="{{ url_for('main.debts') }}">Deudas</a></li>
         <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.categories' }}" href="{{ url_for('main.categories') }}">Categorías</a></li>
+        {% if current_user.is_admin %}
+        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'auth.users' }}" href="{{ url_for('auth.users') }}">Usuarios</a></li>
+        {% endif %}
       </ul>
       <div class="d-flex align-items-center gap-2">
         <button type="button" class="theme-toggle" onclick="finToggleTheme()" title="Cambiar tema" aria-label="Cambiar tema">
           <svg class="ic-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4V2m0 20v-2m8-8h2M2 12h2m13.7 5.7 1.4 1.4M4.9 4.9l1.4 1.4m11.4 0 1.4-1.4M4.9 19.1l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/></svg>
           <svg class="ic-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
         </button>
-        <span class="navbar-text small">{{ current_user.name }}</span>
+        <a class="navbar-text small text-decoration-none {{ 'active' if request.endpoint == 'auth.security' }}" href="{{ url_for('auth.security') }}" title="Seguridad de tu cuenta">{{ current_user.name }}{% if current_user.totp_enabled %} 🔒{% endif %}</a>
         <a class="btn btn-outline-light btn-sm" href="{{ url_for('auth.logout') }}">Salir</a>
       </div>
     </div>

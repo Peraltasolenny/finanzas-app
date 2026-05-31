@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Importar estado de cuenta{% endblock %}
+{% block content %}
+<h4 class="mb-4 page-title">Importar estado de cuenta</h4>
+
+{% if not review %}
+{# ---------- Paso 1: subir archivo ---------- #}
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card shadow-sm"><div class="card-body">
+      <h5 class="card-title mb-3">Subir archivo</h5>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-3">
+          <label class="form-label small">Archivo del banco (PDF, CSV o Excel)</label>
+          <input type="file" name="statement" accept=".pdf,.csv,.xlsx,.xls" class="form-control" required>
+        </div>
+        <button class="btn btn-dark w-100">Leer movimientos</button>
+      </form>
+    </div></div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm"><div class="card-body">
+      <h5 class="card-title mb-2">Cómo funciona</h5>
+      <ul class="small text-muted mb-0">
+        <li>Sube el <strong>PDF</strong> de tu estado de cuenta (debe tener texto, no ser una foto escaneada).</li>
+        <li>También puedes subir un <strong>CSV o Excel</strong> exportado desde tu banca en línea.</li>
+        <li>La app detecta los movimientos (fecha, descripción y monto).</li>
+        <li>Luego <strong>revisas</strong> la lista, ajustas tipo y categoría, y eliges cuáles importar.</li>
+        <li>Nada se guarda hasta que confirmas. 🔒</li>
+      </ul>
+    </div></div>
+  </div>
+</div>
+
+{% else %}
+{# ---------- Paso 2: revisar y confirmar ---------- #}
+<form method="post" action="{{ url_for('main.import_confirm') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="card shadow-sm"><div class="card-body">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+      <h5 class="card-title mb-0">Revisar movimientos {% if filename %}<span class="text-muted small">— {{ filename }}</span>{% endif %}</h5>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="finToggleAll(true)">Marcar todos</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="finToggleAll(false)">Desmarcar todos</button>
+      </div>
+    </div>
+    <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead><tr>
+        <th style="width:36px"><input type="checkbox" class="form-check-input" checked onclick="finToggleAll(this.checked)"></th>
+        <th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Categoría</th><th class="text-end">Monto</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td><input type="checkbox" class="form-check-input fin-include" name="include" value="{{ loop.index0 }}" checked></td>
+          <td><input type="date" name="tx_date" value="{{ r.tx_date.isoformat() }}" class="form-control form-control-sm" style="width:150px"></td>
+          <td><input type="text" name="description" value="{{ r.description }}" class="form-control form-control-sm"></td>
+          <td>
+            <select name="type" class="form-select form-select-sm" style="width:110px">
+              <option value="expense" {{ 'selected' if r.type == 'expense' }}>Gasto</option>
+              <option value="income" {{ 'selected' if r.type == 'income' }}>Ingreso</option>
+            </select>
+          </td>
+          <td>
+            <select name="category_id" class="form-select form-select-sm" style="width:170px">
+              <option value="">(sin categoría)</option>
+              {% for c in categorias %}
+                <option value="{{ c.id }}" data-type="{{ c.type }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td><input type="number" step="0.01" min="0" name="amount" value="{{ '%.2f'|format(r.amount) }}" class="form-control form-control-sm text-end" style="width:120px"></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div class="d-flex gap-2 mt-2">
+      <button class="btn btn-dark">Importar seleccionadas</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('main.import_statement') }}">Cancelar</a>
+    </div>
+  </div></div>
+</form>
+<script>
+  function finToggleAll(checked) {
+    document.querySelectorAll('.fin-include').forEach(function (cb) { cb.checked = checked; });
+  }
+</script>
+{% endif %}
+{% endblock %}

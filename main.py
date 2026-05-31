@@ -1,4 +1,4 @@
-"""Rutas principales: dashboard, transacciones, categorías, presupuesto, metas y deudas."""
+"""Rutas principales: dashboard, transacciones, categorías, presupuesto, metas, deudas e importación."""
 from datetime import date, datetime
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request
@@ -7,6 +7,7 @@ from sqlalchemy import func, extract
 
 from extensions import db
 from models import Category, Transaction, Budget, Goal, Debt
+from importer import parse_statement
 
 main_bp = Blueprint("main", __name__)
 
@@ -23,6 +24,14 @@ def _parse_period():
     if not 1 <= month <= 12:
         month = today.month
     return year, month
+
+
+def _parse_iso_date(value):
+    """Convierte 'YYYY-MM-DD' a date, o None si está vacío/inválido."""
+    try:
+        return datetime.strptime((value or "").strip(), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
 
 
 def _to_float(value, default=0.0):
@@ -140,11 +149,28 @@ def transactions():
                                 year=tx_date.year, month=tx_date.month))
 
     year, month = _parse_period()
-    txs = Transaction.query.filter(
-        Transaction.user_id == uid,
-        extract("year", Transaction.tx_date) == year,
-        extract("month", Transaction.tx_date) == month,
-    ).order_by(Transaction.tx_date.desc(), Transaction.id.desc()).all()
+
+    # Filtro opcional por rango de fechas (tiene prioridad sobre el mes).
+    d_from = _parse_iso_date(request.args.get("desde"))
+    d_to = _parse_iso_date(request.args.get("hasta"))
+    rango_activo = bool(d_from or d_to)
+
+    q = Transaction.query.filter(Transaction.user_id == uid)
+    if rango_activo:
+        if d_from:
+            q = q.filter(Transaction.tx_date >= d_from)
+        if d_to:
+            q = q.filter(Transaction.tx_date <= d_to)
+    else:
+        q = q.filter(
+            extract("year", Transaction.tx_date) == year,
+            extract("month", Transaction.tx_date) == month,
+        )
+    txs = q.order_by(Transaction.tx_date.desc(), Transaction.id.desc()).all()
+
+    # Totales del conjunto mostrado.
+    total_ingresos = sum(t.amount for t in txs if t.type == "income")
+    total_gastos = sum(t.amount for t in txs if t.type == "expense")
 
     categorias = Category.query.filter_by(
         user_id=uid, is_active=True).order_by(Category.type, Category.name).all()
@@ -154,7 +180,71 @@ def transactions():
         year=year, month=month, mes_nombre=MESES[month], meses=MESES,
         hoy=date.today().isoformat(),
         years=list(range(date.today().year - 3, date.today().year + 2)),
+        desde=request.args.get("desde", ""), hasta=request.args.get("hasta", ""),
+        rango_activo=rango_activo,
+        total_ingresos=total_ingresos, total_gastos=total_gastos,
+        neto=total_ingresos - total_gastos,
     )
+
+
+# ----------------- importar estado de cuenta (OCR / CSV / Excel) -----------------
+@main_bp.route("/importar", methods=["GET", "POST"])
+@login_required
+def import_statement():
+    uid = current_user.id
+    categorias = Category.query.filter_by(
+        user_id=uid, is_active=True).order_by(Category.type, Category.name).all()
+
+    if request.method == "POST":
+        file = request.files.get("statement")
+        if not file or not file.filename:
+            flash("Selecciona un archivo (PDF, CSV o Excel).", "danger")
+            return redirect(url_for("main.import_statement"))
+
+        rows, error = parse_statement(file.stream, file.filename)
+        if error:
+            flash(error, "danger")
+            return redirect(url_for("main.import_statement"))
+
+        flash(f"Se detectaron {len(rows)} movimientos. Revísalos y confirma cuáles importar.", "info")
+        return render_template("import.html", review=True, rows=rows,
+                               categorias=categorias, filename=file.filename)
+
+    return render_template("import.html", review=False, categorias=categorias)
+
+
+@main_bp.route("/importar/confirmar", methods=["POST"])
+@login_required
+def import_confirm():
+    uid = current_user.id
+    fechas = request.form.getlist("tx_date")
+    descripciones = request.form.getlist("description")
+    montos = request.form.getlist("amount")
+    tipos = request.form.getlist("type")
+    cats = request.form.getlist("category_id")
+    incluir = set(request.form.getlist("include"))  # índices de filas marcadas
+
+    count = 0
+    for i in range(len(fechas)):
+        if str(i) not in incluir:
+            continue
+        amount = _to_float(montos[i] if i < len(montos) else 0)
+        if amount <= 0:
+            continue
+        tipo = tipos[i] if i < len(tipos) and tipos[i] in ("income", "expense") else "expense"
+        cat = cats[i] if i < len(cats) and cats[i] else None
+        desc = (descripciones[i] if i < len(descripciones) else "")[:255]
+        db.session.add(Transaction(
+            user_id=uid, type=tipo,
+            category_id=int(cat) if cat else None,
+            amount=amount, description=desc,
+            tx_date=_parse_iso_date(fechas[i]) or date.today(),
+        ))
+        count += 1
+    db.session.commit()
+    flash(f"{count} transacciones importadas." if count else "No se importó ninguna transacción.",
+          "success" if count else "info")
+    return redirect(url_for("main.transactions"))
 
 
 @main_bp.route("/transacciones/eliminar/<int:tx_id>", methods=["POST"])
