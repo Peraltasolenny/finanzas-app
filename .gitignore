@@ -1,0 +1,25 @@
+# Secretos: NUNCA subir esto a GitHub
+.env
+
+# Base de datos local
+*.db
+*.db-journal
+*.db-wal
+finanzas.db
+
+# Entorno virtual de Python
+venv/
+.venv/
+env/
+
+# Cache de Python
+__pycache__/
+*.pyc
+
+# Sistema operativo / editores
+.DS_Store
+.idea/
+.vscode/
+
+# Respaldos locales
+_backup_*/

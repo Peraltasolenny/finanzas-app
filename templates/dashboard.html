@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Resumen{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+  <h4 class="mb-0 page-title">Resumen de {{ mes_nombre }} {{ year }}</h4>
+  {% include "_period.html" %}
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="card kpi h-100"><div class="card-body">
+      <div class="kpi-label"><span class="dot dot-in"></span> Ingresos</div>
+      <div class="kpi-value txt-in">{{ money(ingresos) }}</div>
+      <div class="kpi-sub">Entradas del periodo</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card kpi h-100"><div class="card-body">
+      <div class="kpi-label"><span class="dot dot-out"></span> Gastos</div>
+      <div class="kpi-value txt-out">{{ money(gastos) }}</div>
+      <div class="kpi-sub">Salidas del periodo</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card kpi h-100"><div class="card-body">
+      <div class="kpi-label"><span class="dot dot-net"></span> Balance neto</div>
+      <div class="kpi-value {{ 'txt-net' if neto >= 0 else 'txt-out' }}">{{ money(neto) }}</div>
+      <div class="kpi-sub">{{ 'Superávit del periodo' if neto >= 0 else 'Déficit del periodo' }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card kpi h-100"><div class="card-body">
+      <div class="kpi-label"><span class="dot dot-save"></span> Tasa de ahorro</div>
+      <div class="kpi-value txt-save">{{ '%.1f'|format(tasa_ahorro) }}%</div>
+      <div class="kpi-sub">Meta sugerida: 20%</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card h-100"><div class="card-body">
+      <h5 class="card-title mb-3">Presupuestado vs. real</h5>
+      {% if filas_presupuesto %}
+      <table class="table table-sm align-middle">
+        <thead><tr><th>Categoría</th><th class="text-end">Presup.</th><th class="text-end">Real</th><th style="width:35%">Avance</th></tr></thead>
+        <tbody>
+        {% for f in filas_presupuesto %}
+          <tr>
+            <td class="fw-semibold">{{ f.nombre }}</td>
+            <td class="text-end">{{ money(f.presupuestado) }}</td>
+            <td class="text-end">{{ money(f.real) }}</td>
+            <td>
+              {% if f.pct is not none %}
+                {% set color = 'bg-success' if f.pct <= 80 else ('bg-warning' if f.pct <= 100 else 'bg-danger') %}
+                <div class="progress" style="height:18px">
+                  <div class="progress-bar {{ color }}" style="width: {{ [f.pct, 100]|min }}%">{{ '%.0f'|format(f.pct) }}%</div>
+                </div>
+              {% else %}
+                <span class="text-muted small">sin presupuesto</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <p class="text-muted">Aún no hay gastos ni presupuesto este mes.
+        <a href="{{ url_for('main.budget', year=year, month=month) }}">Define tu presupuesto</a>.</p>
+      {% endif %}
+    </div></div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card shadow-sm mb-3"><div class="card-body">
+      <h5 class="card-title mb-3">Metas de ahorro</h5>
+      {% if metas %}
+        {% for g in metas %}
+          <div class="mb-3">
+            <div class="d-flex justify-content-between small mb-1"><span class="fw-semibold">{{ g.name }}</span>
+              <span class="text-muted">{{ money(g.current_amount) }} / {{ money(g.target_amount) }}</span></div>
+            <div class="progress" style="height:14px">
+              <div class="progress-bar bg-info" style="width: {{ g.progress }}%">{{ g.progress }}%</div>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}<p class="text-muted mb-0">Sin metas todavía. <a href="{{ url_for('main.goals') }}">Crear una</a>.</p>{% endif %}
+    </div></div>
+
+    <div class="card shadow-sm"><div class="card-body">
+      <h5 class="card-title mb-3">Deudas</h5>
+      {% if deudas %}
+        <p class="mb-1">Total: <strong class="text-danger">{{ money(total_deuda) }}</strong></p>
+        <p class="text-muted small mb-0">Pago mínimo mensual: {{ money(total_pago_min) }}</p>
+      {% else %}<p class="text-muted mb-0">Sin deudas registradas. 🎉</p>{% endif %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}

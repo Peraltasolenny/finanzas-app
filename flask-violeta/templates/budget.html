@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Presupuesto{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+  <h4 class="mb-0 page-title">Presupuesto — {{ mes_nombre }} {{ year }}</h4>
+  {% include "_period.html" %}
+</div>
+
+<div class="card shadow-sm"><div class="card-body">
+  <p class="text-muted small">Define cuánto piensas gastar en cada categoría este mes. En el resumen verás cómo vas contra lo real.</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Categoría</th><th style="width:30%">Monto presupuestado</th></tr></thead>
+      <tbody>
+      {% for c in categorias %}
+        <tr>
+          <td class="fw-semibold">{{ c.name }}</td>
+          <td>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text">{{ currency }}</span>
+              <input type="number" step="0.01" min="0" name="cat_{{ c.id }}"
+                     value="{{ '%.2f'|format(presupuestos.get(c.id, 0)) }}" class="form-control">
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr class="fw-bold"><td>Total presupuestado</td><td>{{ money(total) }}</td></tr></tfoot>
+    </table>
+    <button class="btn btn-dark">Guardar presupuesto</button>
+  </form>
+</div></div>
+{% endblock %}

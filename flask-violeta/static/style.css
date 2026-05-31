@@ -1,0 +1,227 @@
+/* ============================================================
+   Mis Finanzas — tema Violeta (claro / oscuro)
+   Capa de diseño sobre Bootstrap 5.3 (usa data-bs-theme).
+   Cambia el tema con el botón ☀/🌙 del navbar (se guarda en localStorage).
+   ============================================================ */
+
+/* ---------- tokens ---------- */
+:root, [data-bs-theme="light"] {
+  --fin-bg:        #f3f1fb;
+  --fin-surface:   #ffffff;
+  --fin-surface-2: #f4f2fc;
+  --fin-surface-3: #ebe8f7;
+  --fin-border:    #e6e3f3;
+  --fin-text:      #16132a;
+  --fin-muted:     #635c80;
+  --fin-faint:     #938cb0;
+  --fin-accent:    #6d5ae6;
+  --fin-accent-2:  #1399a8;
+  --fin-accent-ink:#ffffff;
+  --fin-accent-soft: rgba(109,90,230,.12);
+  --fin-pos: #12a065; --fin-pos-soft: rgba(18,160,101,.12);
+  --fin-neg: #df4470; --fin-neg-soft: rgba(223,68,112,.10);
+  --fin-warn:#c9941a; --fin-warn-soft: rgba(201,148,26,.13);
+  --fin-info:#5a4ad1; --fin-info-soft: rgba(90,74,209,.12);
+  --fin-shadow: 0 1px 2px rgba(30,20,60,.05), 0 16px 36px -22px rgba(30,20,60,.25);
+  --fin-glow: radial-gradient(1100px 600px at 82% -12%, rgba(109,90,230,.10), transparent 60%);
+}
+[data-bs-theme="dark"] {
+  --fin-bg:        #0b0a14;
+  --fin-surface:   #15141f;
+  --fin-surface-2: #1c1b29;
+  --fin-surface-3: #242235;
+  --fin-border:    #2a2840;
+  --fin-text:      #ece9f6;
+  --fin-muted:     #9a93b4;
+  --fin-faint:     #645d7e;
+  --fin-accent:    #8b7cff;
+  --fin-accent-2:  #41d6e0;
+  --fin-accent-ink:#0b0820;
+  --fin-accent-soft: rgba(139,124,255,.15);
+  --fin-pos: #43d98a; --fin-pos-soft: rgba(67,217,138,.13);
+  --fin-neg: #ff6585; --fin-neg-soft: rgba(255,101,133,.13);
+  --fin-warn:#f6c344; --fin-warn-soft: rgba(246,195,68,.14);
+  --fin-info:#8b7cff; --fin-info-soft: rgba(139,124,255,.15);
+  --fin-shadow: 0 1px 0 rgba(255,255,255,.02), 0 14px 32px -16px rgba(0,0,0,.65);
+  --fin-glow: radial-gradient(1100px 600px at 82% -12%, rgba(139,124,255,.12), transparent 60%);
+}
+
+/* ---------- map Bootstrap vars onto the violet palette ---------- */
+:root, [data-bs-theme="light"], [data-bs-theme="dark"] {
+  --bs-body-bg: var(--fin-bg);
+  --bs-body-color: var(--fin-text);
+  --bs-border-color: var(--fin-border);
+  --bs-primary: var(--fin-accent);
+  --bs-primary-rgb: 109,90,230;
+  --bs-link-color: var(--fin-accent);
+  --bs-link-hover-color: var(--fin-accent);
+  --bs-secondary-color: var(--fin-muted);
+  --bs-emphasis-color: var(--fin-text);
+  --bs-tertiary-bg: var(--fin-surface-2);
+}
+[data-bs-theme="dark"] { --bs-link-color: var(--fin-accent); }
+
+/* ---------- base ---------- */
+body {
+  font-family: 'Manrope', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--fin-bg);
+  background-image: var(--fin-glow);
+  background-attachment: fixed;
+  color: var(--fin-text);
+  font-feature-settings: "tnum" 1;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+h1,h2,h3,h4,h5,.fs-4,.fs-5,.kpi-value,.display-num {
+  font-family: 'Space Grotesk', 'Manrope', sans-serif;
+  letter-spacing: -.01em;
+}
+a { text-decoration: none; }
+::selection { background: var(--fin-accent-soft); }
+* { scrollbar-width: thin; scrollbar-color: var(--fin-surface-3) transparent; }
+
+/* ---------- navbar ---------- */
+.navbar.app-nav {
+  background: color-mix(in srgb, var(--fin-surface) 88%, transparent) !important;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--fin-border);
+}
+.navbar.app-nav .navbar-brand {
+  display: flex; align-items: center; gap: 11px;
+  font-weight: 800; font-size: 1.18rem; color: var(--fin-text);
+}
+.navbar.app-nav .brand-mark {
+  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  background: linear-gradient(140deg, var(--fin-accent), var(--fin-accent-2));
+  color: var(--fin-accent-ink); font-weight: 800;
+  box-shadow: 0 6px 16px -6px var(--fin-accent);
+}
+.navbar.app-nav .nav-link {
+  color: var(--fin-muted); font-weight: 600; font-size: .95rem;
+  padding: .45rem .85rem; border-radius: 9px; margin: 0 1px;
+  transition: color .15s, background .15s;
+}
+.navbar.app-nav .nav-link:hover { color: var(--fin-text); background: var(--fin-surface-2); }
+.navbar.app-nav .nav-link.active { color: var(--fin-accent-ink); background: var(--fin-accent); }
+.navbar.app-nav .navbar-text { color: var(--fin-muted) !important; }
+.navbar-toggler { border-color: var(--fin-border); }
+
+/* theme toggle */
+.theme-toggle {
+  display: inline-grid; place-items: center; width: 38px; height: 38px;
+  border-radius: 10px; border: 1px solid var(--fin-border);
+  background: var(--fin-surface-2); color: var(--fin-muted); cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.theme-toggle:hover { color: var(--fin-accent); border-color: var(--fin-accent); }
+.theme-toggle .ic-moon { display: none; }
+.theme-toggle .ic-sun  { display: block; }
+[data-bs-theme="light"] .theme-toggle .ic-moon { display: block; }
+[data-bs-theme="light"] .theme-toggle .ic-sun  { display: none; }
+
+/* ---------- cards ---------- */
+.card {
+  background: var(--fin-surface);
+  border: 1px solid var(--fin-border);
+  border-radius: 16px;
+  box-shadow: var(--fin-shadow);
+}
+.card-title { font-weight: 700; font-size: 1.02rem; }
+.shadow-sm { box-shadow: var(--fin-shadow) !important; }
+
+/* KPI tiles (dashboard) */
+.kpi { position: relative; overflow: hidden; }
+.kpi .kpi-label { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--fin-muted); font-weight: 600; }
+.kpi .kpi-label .dot { width: 8px; height: 8px; border-radius: 99px; }
+.kpi .kpi-value { font-size: 1.7rem; font-weight: 700; margin-top: .55rem; }
+.kpi .kpi-sub { font-size: .78rem; color: var(--fin-faint); margin-top: .55rem; }
+.dot-in  { background: var(--fin-pos); } .txt-in  { color: var(--fin-pos); }
+.dot-out { background: var(--fin-neg); } .txt-out { color: var(--fin-neg); }
+.dot-net { background: var(--fin-accent); } .txt-net { color: var(--fin-accent); }
+.dot-save{ background: var(--fin-info); } .txt-save{ color: var(--fin-info); }
+
+/* legacy text-bg-* tiles -> tinted (works even if you keep old markup) */
+.text-bg-success { background: var(--fin-pos-soft) !important; color: var(--fin-text) !important; }
+.text-bg-danger  { background: var(--fin-neg-soft) !important;  color: var(--fin-text) !important; }
+.text-bg-primary { background: var(--fin-accent-soft) !important; color: var(--fin-text) !important; }
+.text-bg-warning { background: var(--fin-warn-soft) !important; color: var(--fin-text) !important; }
+.text-bg-dark    { background: var(--fin-surface-2) !important; color: var(--fin-text) !important; border: 1px solid var(--fin-border); }
+.text-bg-success .fw-bold { color: var(--fin-pos); }
+.text-bg-danger  .fw-bold { color: var(--fin-neg); }
+.text-bg-primary .fw-bold { color: var(--fin-accent); }
+.text-bg-success .small, .text-bg-danger .small, .text-bg-primary .small,
+.text-bg-warning .small, .text-bg-dark .small { color: var(--fin-muted) !important; }
+.text-white-50 { color: var(--fin-faint) !important; }
+
+/* ---------- buttons ---------- */
+.btn { border-radius: 10px; font-weight: 600; }
+.btn-dark, .btn-primary {
+  background: var(--fin-accent); border-color: var(--fin-accent); color: var(--fin-accent-ink);
+}
+.btn-dark:hover, .btn-primary:hover {
+  background: color-mix(in srgb, var(--fin-accent) 88%, #000);
+  border-color: color-mix(in srgb, var(--fin-accent) 88%, #000); color: var(--fin-accent-ink);
+  transform: translateY(-1px); box-shadow: 0 8px 20px -10px var(--fin-accent);
+}
+.btn-success { background: var(--fin-pos); border-color: var(--fin-pos); color: #fff; }
+.btn-success:hover { background: color-mix(in srgb, var(--fin-pos) 86%, #000); border-color: transparent; }
+.btn-outline-secondary { color: var(--fin-muted); border-color: var(--fin-border); }
+.btn-outline-secondary:hover { background: var(--fin-surface-2); color: var(--fin-text); border-color: var(--fin-border); }
+.btn-outline-danger { color: var(--fin-neg); border-color: color-mix(in srgb, var(--fin-neg) 45%, transparent); }
+.btn-outline-danger:hover { background: var(--fin-neg); border-color: var(--fin-neg); color: #fff; }
+.btn-outline-success { color: var(--fin-pos); border-color: color-mix(in srgb, var(--fin-pos) 45%, transparent); }
+.btn-outline-success:hover { background: var(--fin-pos); border-color: var(--fin-pos); color: #fff; }
+.btn-outline-light { color: var(--fin-muted); border-color: var(--fin-border); }
+.btn-outline-light:hover { background: var(--fin-surface-2); color: var(--fin-text); border-color: var(--fin-accent); }
+
+/* ---------- forms ---------- */
+.form-control, .form-select {
+  background: var(--fin-surface-2); border: 1px solid var(--fin-border); color: var(--fin-text);
+  border-radius: 10px; padding: .55rem .75rem;
+}
+.form-control:focus, .form-select:focus {
+  background: var(--fin-surface-2); color: var(--fin-text);
+  border-color: var(--fin-accent); box-shadow: 0 0 0 3px var(--fin-accent-soft);
+}
+.form-control::placeholder { color: var(--fin-faint); }
+.form-label { color: var(--fin-muted); font-weight: 600; }
+.input-group-text { background: var(--fin-surface-3); border-color: var(--fin-border); color: var(--fin-muted); border-radius: 10px; }
+
+/* ---------- tables ---------- */
+.table { --bs-table-bg: transparent; color: var(--fin-text); border-color: var(--fin-border); margin-bottom: 0; }
+.table > thead th {
+  font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--fin-faint); font-weight: 700; border-color: var(--fin-border);
+}
+.table > :not(caption) > * > * { border-color: var(--fin-border); padding: .7rem .6rem; background: transparent; }
+.table-hover > tbody > tr:hover > * { background: var(--fin-surface-2); }
+.text-muted { color: var(--fin-muted) !important; }
+.text-success { color: var(--fin-pos) !important; }
+.text-danger  { color: var(--fin-neg) !important; }
+
+/* ---------- progress ---------- */
+.progress { background: var(--fin-surface-3); border-radius: 8px; height: 16px; }
+.progress-bar { font-weight: 700; font-size: .72rem; }
+.progress-bar.bg-success { background: var(--fin-pos) !important; }
+.progress-bar.bg-warning { background: var(--fin-warn) !important; color: #1a1300; }
+.progress-bar.bg-danger  { background: var(--fin-neg) !important; }
+.progress-bar.bg-info    { background: var(--fin-accent) !important; color: var(--fin-accent-ink); }
+
+/* ---------- badges, pills ---------- */
+.badge.text-bg-secondary { background: var(--fin-surface-3) !important; color: var(--fin-muted) !important; font-weight: 600; border-radius: 99px; }
+
+/* ---------- alerts ---------- */
+.alert { border-radius: 12px; border: 1px solid var(--fin-border); }
+.alert-success { background: var(--fin-pos-soft); color: var(--fin-text); border-color: color-mix(in srgb, var(--fin-pos) 30%, transparent); }
+.alert-danger  { background: var(--fin-neg-soft); color: var(--fin-text); border-color: color-mix(in srgb, var(--fin-neg) 30%, transparent); }
+.alert-info    { background: var(--fin-info-soft); color: var(--fin-text); border-color: color-mix(in srgb, var(--fin-accent) 30%, transparent); }
+.alert-warning { background: var(--fin-warn-soft); color: var(--fin-text); border-color: color-mix(in srgb, var(--fin-warn) 30%, transparent); }
+
+/* ---------- auth screens ---------- */
+.auth-card { max-width: 420px; margin: 6vh auto 0; }
+.auth-card .brand-mark { width: 46px; height: 46px; border-radius: 13px; margin: 0 auto .6rem; font-size: 1.3rem; }
+
+/* ---------- misc ---------- */
+.page-title { font-weight: 800; letter-spacing: -.02em; }
+hr { border-color: var(--fin-border); opacity: 1; }
