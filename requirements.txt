@@ -1,11 +1,41 @@
+# Dependencias con versiones fijas (probadas y funcionando).
+# Pinear todo evita que Render instale versiones distintas a las locales.
+
+# --- Núcleo de la app ---
 Flask==3.0.3
 Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.3
 Flask-WTF==1.2.1
+WTForms==3.2.2
+Werkzeug==3.1.8
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+SQLAlchemy==2.0.50
+itsdangerous==2.2.0
+click==8.4.1
+blinker==1.9.0
+python-dotenv==1.0.1
+
+# --- Servidor y base de datos ---
 gunicorn==22.0.0
 psycopg2-binary==2.9.9
-python-dotenv==1.0.1
+
+# --- Importar estados de cuenta (PDF / Excel) ---
 pdfplumber==0.11.9
+pdfminer.six==20251230
+pypdfium2==5.8.0
+pillow==12.2.0
 openpyxl==3.1.5
+et_xmlfile==2.0.0
+charset-normalizer==3.4.7
+
+# --- Seguridad / 2FA ---
 pyotp==2.9.0
-qrcode[pil]==8.2
+qrcode==8.2
+cryptography==48.0.0
+cffi==2.0.0
+pycparser==3.0
+
+# --- Utilidades transitivas ---
+packaging==26.2
+typing_extensions==4.15.0
