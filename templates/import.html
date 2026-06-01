@@ -45,6 +45,26 @@
         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="finToggleAll(false)">Desmarcar todos</button>
       </div>
     </div>
+
+    {# Cuenta/banco y moneda que se aplican a TODOS los movimientos importados #}
+    <div class="row g-2 align-items-end mb-3 p-2 rounded" style="background:rgba(0,0,0,.04)">
+      <div class="col-sm-6 col-lg-5">
+        <label class="form-label small mb-0">Cuenta / banco (para todos)</label>
+        <select name="account_id" class="form-select form-select-sm">
+          <option value="">(ninguna — no aparecerá en "Por banco")</option>
+          {% for a in accounts %}
+            <option value="{{ a.id }}" {{ 'selected' if sel_account == a.id|string }}>{{ a.name }}{% if a.bank %} — {{ a.bank }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-3 col-lg-2">
+        <label class="form-label small mb-0">Moneda</label>
+        <input type="text" name="currency" value="{{ base }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-12 col-lg-5">
+        <span class="small text-muted">Asocia el estado de cuenta a una de tus cuentas/tarjetas para que los movimientos se vean en <strong>Por banco</strong> y se conviertan a tu moneda base. <a href="{{ url_for('v2.cuentas') }}">¿No tienes cuentas?</a></span>
+      </div>
+    </div>
     <div class="table-responsive">
     <table class="table table-sm align-middle">
       <thead><tr>

@@ -255,6 +255,10 @@ def import_statement():
     uid = current_user.id
     categorias = Category.query.filter_by(
         user_id=uid, is_active=True).order_by(Category.type, Category.name).all()
+    from models import Account
+    accounts = Account.query.filter_by(user_id=uid, is_active=True).order_by(
+        Account.name).all()
+    base = current_user.settings.base_currency
 
     if request.method == "POST":
         file = request.files.get("statement")
@@ -269,9 +273,13 @@ def import_statement():
 
         flash(f"Se detectaron {len(rows)} movimientos. Revísalos y confirma cuáles importar.", "info")
         return render_template("import.html", review=True, rows=rows,
-                               categorias=categorias, filename=file.filename)
+                               categorias=categorias, accounts=accounts, base=base,
+                               # cuenta preseleccionada si la subieron en el paso 1
+                               sel_account=request.form.get("account_id", ""),
+                               filename=file.filename)
 
-    return render_template("import.html", review=False, categorias=categorias)
+    return render_template("import.html", review=False, categorias=categorias,
+                           accounts=accounts, base=base)
 
 
 @main_bp.route("/importar/confirmar", methods=["POST"])
@@ -284,6 +292,11 @@ def import_confirm():
     tipos = request.form.getlist("type")
     cats = request.form.getlist("category_id")
     incluir = set(request.form.getlist("include"))  # índices de filas marcadas
+
+    # Cuenta/banco y moneda que se aplican a todos los movimientos importados.
+    acc_id = request.form.get("account_id") or None
+    account_id = int(acc_id) if acc_id else None
+    currency = request.form.get("currency", "").strip() or None
 
     count = 0
     for i in range(len(fechas)):
@@ -298,6 +311,7 @@ def import_confirm():
         db.session.add(Transaction(
             user_id=uid, type=tipo,
             category_id=int(cat) if cat else None,
+            account_id=account_id, currency=currency,
             amount=amount, description=desc,
             tx_date=_parse_iso_date(fechas[i]) or date.today(),
         ))
