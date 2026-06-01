@@ -9,7 +9,8 @@ from sqlalchemy import extract, func
 from extensions import db
 from models import (Category, Transaction, Account, RecurringRule, ExchangeRate,
                     PayrollDeduction, Budget, Goal, ACCOUNT_KINDS, BUCKETS,
-                    CAPITALIZATIONS, CardBalance, CreditLine, CashbackRule)
+                    CAPITALIZATIONS, CardBalance, CreditLine, CashbackRule,
+                    Family, AccountShare, User, LIABILITY_KINDS)
 import finance
 
 v2_bp = Blueprint("v2", __name__)
@@ -530,6 +531,145 @@ def patrimonio():
                for a in cuentas]
     return render_template("patrimonio.html", nw=nw, detalle=detalle,
                            kind_labels=ACCOUNT_KINDS, base=current_user.settings.base_currency)
+
+
+# ----------------- FAMILIA -----------------
+@v2_bp.route("/familia", methods=["GET", "POST"])
+@login_required
+def familia():
+    uid = current_user.id
+    fam = db.session.get(Family, current_user.family_id) if current_user.family_id else None
+
+    if request.method == "POST":
+        # Crear familia (el usuario actual queda como dueño y miembro).
+        nombre = request.form.get("name", "").strip() or "Mi familia"
+        if fam is None:
+            fam = Family(name=nombre, owner_id=uid)
+            db.session.add(fam)
+            db.session.flush()
+            current_user.family_id = fam.id
+            db.session.commit()
+            flash("Familia creada.", "success")
+        return redirect(url_for("v2.familia"))
+
+    if fam is None:
+        return render_template("familia.html", fam=None)
+
+    miembros = User.query.filter_by(family_id=fam.id).order_by(User.id).all()
+    rates = finance.get_rates(current_user)
+    base = current_user.settings.base_currency
+
+    def patrimonio_de(u):
+        act = pas = 0.0
+        for a in Account.query.filter_by(user_id=u.id, is_active=True).all():
+            v = finance.to_base(a.balance, a.currency, current_user, rates)
+            if a.kind in LIABILITY_KINDS:
+                pas += v
+            else:
+                act += v
+        return act - pas
+
+    resumen = []
+    total_patrimonio = 0.0
+    for m in miembros:
+        p = patrimonio_de(m)
+        total_patrimonio += p
+        resumen.append({"u": m, "patrimonio": p, "is_owner": m.id == fam.owner_id})
+
+    # Metas familiares (compartidas) de todos los miembros.
+    ids = [m.id for m in miembros]
+    metas = Goal.query.filter(Goal.user_id.in_(ids), Goal.is_shared.is_(True)).all()
+
+    # Gastos compartidos del mes (suma de gastos de todos los miembros).
+    hoy = date.today()
+    txs = Transaction.query.filter(
+        Transaction.user_id.in_(ids), Transaction.type == "expense",
+        extract("year", Transaction.tx_date) == hoy.year,
+        extract("month", Transaction.tx_date) == hoy.month).all()
+    gastos_mes = sum(finance.to_base(t.amount, t.currency, current_user, rates) for t in txs)
+
+    # Cuentas que me han compartido y cuentas que yo comparto.
+    compartidas_conmigo = AccountShare.query.filter_by(user_id=uid).all()
+    mis_cuentas = Account.query.filter_by(user_id=uid, is_active=True).order_by(Account.name).all()
+
+    return render_template("familia.html", fam=fam, miembros=miembros, resumen=resumen,
+                           total_patrimonio=total_patrimonio, metas=metas, gastos_mes=gastos_mes,
+                           es_dueno=(fam.owner_id == uid), base=base,
+                           compartidas_conmigo=compartidas_conmigo, mis_cuentas=mis_cuentas,
+                           mes=MESES[hoy.month])
+
+
+@v2_bp.route("/familia/miembro", methods=["POST"])
+@login_required
+def agregar_miembro():
+    fam = db.session.get(Family, current_user.family_id) if current_user.family_id else None
+    if not fam or fam.owner_id != current_user.id:
+        flash("Solo el dueño de la familia puede agregar miembros.", "danger")
+        return redirect(url_for("v2.familia"))
+    email = request.form.get("email", "").strip().lower()
+    u = User.query.filter_by(email=email).first()
+    if not u:
+        flash("No existe un usuario con ese correo. Pídele al admin que cree su cuenta primero.", "danger")
+    elif u.family_id:
+        flash("Ese usuario ya pertenece a una familia.", "danger")
+    else:
+        u.family_id = fam.id
+        db.session.commit()
+        flash(f"{u.name or u.email} se unió a la familia.", "success")
+    return redirect(url_for("v2.familia"))
+
+
+@v2_bp.route("/familia/miembro/<int:user_id>/quitar", methods=["POST"])
+@login_required
+def quitar_miembro(user_id):
+    fam = db.session.get(Family, current_user.family_id) if current_user.family_id else None
+    u = db.session.get(User, user_id)
+    if not fam or fam.owner_id != current_user.id:
+        flash("Solo el dueño puede quitar miembros.", "danger")
+    elif u and u.id == fam.owner_id:
+        flash("El dueño no puede quitarse a sí mismo (elimina la familia).", "danger")
+    elif u and u.family_id == fam.id:
+        u.family_id = None
+        db.session.commit()
+        flash("Miembro removido de la familia.", "info")
+    return redirect(url_for("v2.familia"))
+
+
+@v2_bp.route("/familia/salir", methods=["POST"])
+@login_required
+def salir_familia():
+    current_user.family_id = None
+    db.session.commit()
+    flash("Saliste de la familia.", "info")
+    return redirect(url_for("v2.familia"))
+
+
+@v2_bp.route("/familia/compartir", methods=["POST"])
+@login_required
+def compartir_cuenta():
+    acc = _owned_account(_int(request.form.get("account_id")))
+    u = db.session.get(User, _int(request.form.get("user_id")))
+    can_register = request.form.get("can_register") == "on"
+    if acc and u and u.id != current_user.id:
+        share = AccountShare.query.filter_by(account_id=acc.id, user_id=u.id).first()
+        if share is None:
+            share = AccountShare(account_id=acc.id, user_id=u.id)
+            db.session.add(share)
+        share.can_register = can_register
+        db.session.commit()
+        flash(f"Cuenta compartida con {u.name or u.email}.", "success")
+    return redirect(url_for("v2.familia"))
+
+
+@v2_bp.route("/familia/compartir/<int:share_id>/quitar", methods=["POST"])
+@login_required
+def quitar_comparticion(share_id):
+    sh = db.session.get(AccountShare, share_id)
+    if sh and sh.account.user_id == current_user.id:
+        db.session.delete(sh)
+        db.session.commit()
+        flash("Se quitó el acceso compartido.", "info")
+    return redirect(url_for("v2.familia"))
 
 
 # ----------------- PROYECCIONES -----------------

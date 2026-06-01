@@ -74,6 +74,8 @@
             <li><a class="dropdown-item" href="{{ url_for('v2.patrimonio') }}">Patrimonio</a></li>
           </ul>
         </li>
+        {# Familia #}
+        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'v2.familia' }}" href="{{ url_for('v2.familia') }}">Familia</a></li>
         {# Configuración #}
         <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint in ['v2.configuracion','v2.nomina'] }}" href="{{ url_for('v2.configuracion') }}">Configuración</a></li>
         {% if current_user.is_admin %}

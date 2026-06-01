@@ -204,8 +204,12 @@ def transactions():
 
     categorias = Category.query.filter_by(
         user_id=uid, is_active=True).order_by(Category.type, Category.name).all()
-    from models import Account
+    from models import Account, AccountShare
     accounts = Account.query.filter_by(user_id=uid, is_active=True).order_by(Account.name).all()
+    # Más las cuentas que me compartieron con permiso de registrar.
+    for sh in AccountShare.query.filter_by(user_id=uid, can_register=True).all():
+        if sh.account and sh.account.is_active:
+            accounts.append(sh.account)
 
     return render_template(
         "transactions.html", transactions=txs, categorias=categorias, accounts=accounts,
