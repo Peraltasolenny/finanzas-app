@@ -68,6 +68,7 @@ class User(UserMixin, db.Model):
     recurring_rules = db.relationship("RecurringRule", backref="user", cascade="all, delete-orphan")
     exchange_rates = db.relationship("ExchangeRate", backref="user", cascade="all, delete-orphan")
     deductions = db.relationship("PayrollDeduction", backref="user", cascade="all, delete-orphan")
+    banks = db.relationship("Bank", backref="user", cascade="all, delete-orphan")
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -127,6 +128,17 @@ class ExchangeRate(db.Model):
     __table_args__ = (
         db.UniqueConstraint("user_id", "code", name="uq_rate"),
     )
+
+
+class Bank(db.Model):
+    """Banco/entidad del usuario: país, monedas que maneja y tasa referencial."""
+    __tablename__ = "banks"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    country = db.Column(db.String(80), nullable=True)
+    currencies = db.Column(db.String(120), nullable=True)       # ej. "RD$, US$"
+    reference_rate = db.Column(db.Float, nullable=True)         # tasa referencial anual %
 
 
 class Category(db.Model):

@@ -66,12 +66,13 @@
         </li>
         {# Planeación #}
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['main.goals','main.budget','v2.proyecciones','v2.patrimonio'] }}" href="#" role="button" data-bs-toggle="dropdown">Planeación</a>
+          <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['main.goals','main.budget','v2.proyecciones','v2.patrimonio','v2.simulador'] }}" href="#" role="button" data-bs-toggle="dropdown">Planeación</a>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="{{ url_for('main.goals') }}">Metas</a></li>
             <li><a class="dropdown-item" href="{{ url_for('main.budget') }}">Presupuesto</a></li>
             <li><a class="dropdown-item" href="{{ url_for('v2.proyecciones') }}">Proyecciones</a></li>
             <li><a class="dropdown-item" href="{{ url_for('v2.patrimonio') }}">Patrimonio</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.simulador') }}">Simulador de pagos</a></li>
           </ul>
         </li>
         {# Familia #}

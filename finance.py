@@ -161,6 +161,82 @@ def health_breakdown(user, transactions, rates=None):
     return {"filas": filas, "total": total, "sin_clasificar": sums["sin"]}
 
 
+# ----------------- proyección de valor / amortización -----------------
+_CAP_PERIODS = {"daily": 365, "monthly": 12, "quarterly": 4, "semiannual": 2, "annual": 1}
+
+
+def projected_amount(account):
+    """Calcula el monto proyectado según intereses y plazo.
+
+    - Ahorro/certificado/corretaje/complementaria: valor futuro con capitalización.
+    - Préstamo: total a pagar (capital + intereses) con amortización francesa.
+    Devuelve None si faltan datos.
+    """
+    rate = (account.interest_rate or 0) / 100.0
+    months = account.term_months or 0
+    if months <= 0 or rate <= 0:
+        return None
+
+    if account.kind == "prestamo":
+        principal = account.original_amount or account.balance or 0
+        if principal <= 0:
+            return None
+        i = rate / 12.0
+        cuota = principal * i / (1 - (1 + i) ** (-months))
+        return round(cuota * months, 2)
+
+    # Activos que generan interés: valor futuro.
+    principal = account.balance or 0
+    if principal <= 0:
+        return None
+    years = months / 12.0
+    n = _CAP_PERIODS.get(account.capitalization, 0)
+    if n:  # interés compuesto
+        return round(principal * (1 + rate / n) ** (n * years), 2)
+    return round(principal * (1 + rate * years), 2)  # interés simple
+
+
+def amortization(principal, annual_rate, months, extra=0.0):
+    """Simula un préstamo con pago extra mensual opcional.
+
+    Devuelve dict: cuota base, meses reales, total pagado, total interés.
+    """
+    if principal <= 0 or months <= 0:
+        return None
+    i = (annual_rate / 100.0) / 12.0
+    if i <= 0:
+        base_cuota = principal / months
+    else:
+        base_cuota = principal * i / (1 - (1 + i) ** (-months))
+    saldo = principal
+    pago_mensual = base_cuota + max(0.0, extra)
+    total_pagado = 0.0
+    meses = 0
+    guard = 0
+    while saldo > 0.005 and guard < 1200:
+        interes = saldo * i
+        capital = pago_mensual - interes
+        if capital <= 0:  # el pago no cubre ni el interés
+            return {"cuota": round(base_cuota, 2), "meses": None,
+                    "total_pagado": None, "total_interes": None, "no_amortiza": True}
+        if capital > saldo:
+            capital = saldo
+            pago_real = capital + interes
+        else:
+            pago_real = pago_mensual
+        saldo -= capital
+        total_pagado += pago_real
+        meses += 1
+        guard += 1
+    return {
+        "cuota": round(base_cuota, 2),
+        "meses": meses,
+        "total_pagado": round(total_pagado, 2),
+        "total_interes": round(total_pagado - principal, 2),
+        "no_amortiza": False,
+    }
+
+
 # ----------------- patrimonio neto -----------------
 def net_worth(user, rates=None):
     """Activos (cuentas/inversiones) menos pasivos (tarjetas/préstamos), en moneda base."""

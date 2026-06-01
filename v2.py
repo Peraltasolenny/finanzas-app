@@ -10,7 +10,7 @@ from extensions import db
 from models import (Category, Transaction, Account, RecurringRule, ExchangeRate,
                     PayrollDeduction, Budget, Goal, ACCOUNT_KINDS, BUCKETS,
                     CAPITALIZATIONS, CardBalance, CreditLine, CashbackRule,
-                    Family, AccountShare, User, LIABILITY_KINDS)
+                    Family, AccountShare, User, LIABILITY_KINDS, Bank)
 import finance
 
 v2_bp = Blueprint("v2", __name__)
@@ -62,8 +62,38 @@ def configuracion():
     categorias = Category.query.filter_by(
         user_id=current_user.id, type="expense").order_by(Category.name).all()
     tasas = ExchangeRate.query.filter_by(user_id=current_user.id).order_by(ExchangeRate.code).all()
+    bancos = Bank.query.filter_by(user_id=current_user.id).order_by(Bank.name).all()
     return render_template("configuracion.html", s=s, categorias=categorias,
-                           tasas=tasas, buckets=BUCKETS)
+                           tasas=tasas, buckets=BUCKETS, bancos=bancos)
+
+
+@v2_bp.route("/configuracion/banco", methods=["POST"])
+@login_required
+def guardar_banco():
+    name = request.form.get("name", "").strip()
+    if name:
+        db.session.add(Bank(
+            user_id=current_user.id, name=name,
+            country=request.form.get("country", "").strip() or None,
+            currencies=request.form.get("currencies", "").strip() or None,
+            reference_rate=_f(request.form.get("reference_rate")) or None,
+        ))
+        db.session.commit()
+        flash("Banco agregado.", "success")
+    else:
+        flash("El nombre del banco es obligatorio.", "danger")
+    return redirect(url_for("v2.configuracion"))
+
+
+@v2_bp.route("/configuracion/banco/<int:bank_id>/eliminar", methods=["POST"])
+@login_required
+def eliminar_banco(bank_id):
+    b = db.session.get(Bank, bank_id)
+    if b and b.user_id == current_user.id:
+        db.session.delete(b)
+        db.session.commit()
+        flash("Banco eliminado.", "info")
+    return redirect(url_for("v2.configuracion"))
 
 
 @v2_bp.route("/configuracion/tasas", methods=["POST"])
@@ -188,6 +218,10 @@ def _producto_view(kinds, titulo, plantilla="accounts.html"):
         if not acc.name:
             flash("El nombre es obligatorio.", "danger")
         else:
+            # Calcula el monto proyectado con intereses y plazo (si hay datos).
+            calc = finance.projected_amount(acc)
+            if calc is not None:
+                acc.projected_amount = calc
             db.session.add(acc)
             db.session.commit()
             flash("Producto agregado.", "success")
@@ -670,6 +704,43 @@ def quitar_comparticion(share_id):
         db.session.commit()
         flash("Se quitó el acceso compartido.", "info")
     return redirect(url_for("v2.familia"))
+
+
+# ----------------- SIMULADOR DE PAGOS EXTRAORDINARIOS -----------------
+@v2_bp.route("/simulador")
+@login_required
+def simulador():
+    uid = current_user.id
+    prestamos = Account.query.filter_by(user_id=uid, kind="prestamo", is_active=True).all()
+
+    loan_id = _int(request.args.get("loan_id"))
+    principal = _f(request.args.get("principal"))
+    rate = _f(request.args.get("rate"))
+    months = _int(request.args.get("months")) or 0
+    extra = _f(request.args.get("extra"))
+
+    sel = None
+    if loan_id:
+        a = _owned_account(loan_id)
+        if a:
+            sel = a.id
+            principal = a.original_amount or a.balance
+            rate = a.interest_rate
+            months = a.term_months or 0
+
+    base_sim = finance.amortization(principal, rate, months) if principal and months else None
+    extra_sim = (finance.amortization(principal, rate, months, extra)
+                 if principal and months and extra else None)
+    ahorro = None
+    if base_sim and extra_sim and not base_sim.get("no_amortiza") and not extra_sim.get("no_amortiza"):
+        ahorro = {
+            "meses": base_sim["meses"] - extra_sim["meses"],
+            "interes": round(base_sim["total_interes"] - extra_sim["total_interes"], 2),
+        }
+    return render_template("simulador.html", prestamos=prestamos, sel=sel,
+                           principal=principal, rate=rate, months=months, extra=extra,
+                           base_sim=base_sim, extra_sim=extra_sim, ahorro=ahorro,
+                           base=current_user.settings.base_currency)
 
 
 # ----------------- PROYECCIONES -----------------

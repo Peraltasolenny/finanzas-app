@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Simulador de pagos{% endblock %}
+{% block content %}
+<h4 class="mb-4 page-title">Simulador de pagos extraordinarios</h4>
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card shadow-sm"><div class="card-body">
+      <h5 class="card-title mb-3">Datos del préstamo</h5>
+      <form method="get">
+        {% if prestamos %}
+        <div class="mb-2"><label class="form-label small">Usar un préstamo tuyo</label>
+          <select name="loan_id" class="form-select" onchange="this.form.submit()">
+            <option value="">(manual)</option>
+            {% for p in prestamos %}<option value="{{ p.id }}" {{ 'selected' if sel == p.id }}>{{ p.name }}</option>{% endfor %}
+          </select></div>
+        {% endif %}
+        <div class="mb-2"><label class="form-label small">Capital / monto</label>
+          <input type="number" step="0.01" name="principal" value="{{ '%.2f'|format(principal) if principal else '' }}" class="form-control" required></div>
+        <div class="row g-2">
+          <div class="col-6"><label class="form-label small">Tasa anual %</label>
+            <input type="number" step="0.01" name="rate" value="{{ '%g'|format(rate) if rate else '' }}" class="form-control" required></div>
+          <div class="col-6"><label class="form-label small">Plazo (meses)</label>
+            <input type="number" min="1" name="months" value="{{ months or '' }}" class="form-control" required></div>
+        </div>
+        <div class="mb-3 mt-2"><label class="form-label small">Pago extra mensual</label>
+          <input type="number" step="0.01" name="extra" value="{{ '%.2f'|format(extra) if extra else '' }}" class="form-control" placeholder="Ej. 2000"></div>
+        <button class="btn btn-dark w-100">Calcular</button>
+      </form>
+    </div></div>
+  </div>
+
+  <div class="col-lg-8">
+    {% if base_sim %}
+    {% if base_sim.no_amortiza %}
+      <div class="alert alert-warning">Con esa tasa y plazo, la cuota no alcanza a amortizar el capital. Revisa los datos.</div>
+    {% else %}
+    <div class="row g-3">
+      <div class="col-md-6"><div class="card shadow-sm h-100"><div class="card-body">
+        <h6 class="text-muted">Plan original</h6>
+        <table class="table table-sm align-middle mb-0">
+          <tr><td>Cuota mensual</td><td class="text-end fw-bold">{{ money(base_sim.cuota) }}</td></tr>
+          <tr><td>Plazo</td><td class="text-end">{{ base_sim.meses }} meses</td></tr>
+          <tr><td>Total a pagar</td><td class="text-end">{{ money(base_sim.total_pagado) }}</td></tr>
+          <tr><td>Total intereses</td><td class="text-end txt-out">{{ money(base_sim.total_interes) }}</td></tr>
+        </table>
+      </div></div></div>
+
+      <div class="col-md-6"><div class="card shadow-sm h-100"><div class="card-body">
+        <h6 class="text-muted">Con pago extra {% if extra %}(+{{ money(extra) }}/mes){% endif %}</h6>
+        {% if extra_sim and not extra_sim.no_amortiza %}
+        <table class="table table-sm align-middle mb-0">
+          <tr><td>Cuota + extra</td><td class="text-end fw-bold">{{ money(extra_sim.cuota + extra) }}</td></tr>
+          <tr><td>Plazo</td><td class="text-end">{{ extra_sim.meses }} meses</td></tr>
+          <tr><td>Total a pagar</td><td class="text-end">{{ money(extra_sim.total_pagado) }}</td></tr>
+          <tr><td>Total intereses</td><td class="text-end txt-out">{{ money(extra_sim.total_interes) }}</td></tr>
+        </table>
+        {% else %}<p class="text-muted">Ingresa un pago extra mensual para comparar.</p>{% endif %}
+      </div></div></div>
+    </div>
+
+    {% if ahorro %}
+    <div class="card shadow-sm mt-3"><div class="card-body text-center">
+      <h5 class="mb-3">Con tu pago extra ahorrarías</h5>
+      <div class="row">
+        <div class="col-6">
+          <div class="display-6 fw-bold txt-net">{{ ahorro.meses }}</div>
+          <div class="small text-muted">meses menos</div>
+        </div>
+        <div class="col-6">
+          <div class="display-6 fw-bold txt-net">{{ money(ahorro.interes) }}</div>
+          <div class="small text-muted">en intereses</div>
+        </div>
+      </div>
+    </div></div>
+    {% endif %}
+    {% endif %}
+    {% else %}
+    <div class="card shadow-sm"><div class="card-body text-muted">
+      Ingresa los datos del préstamo (o elige uno tuyo) y un pago extra mensual para ver cuánto tiempo e intereses te ahorrarías.
+    </div></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

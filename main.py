@@ -518,10 +518,25 @@ def edit_goal(goal_id):
 @login_required
 def contribute_goal(goal_id):
     g = db.session.get(Goal, goal_id)
-    if g and g.user_id == current_user.id:
-        g.current_amount += _to_float(request.form.get("amount"))
+    monto = _to_float(request.form.get("amount"))
+    if g and g.user_id == current_user.id and monto > 0:
+        g.current_amount += monto
+
+        # Refleja el aporte como transacción (gasto destinado a inversión/ahorro).
+        cat = g.category or Category.query.filter_by(
+            user_id=current_user.id, name="Ahorro e inversión", type="expense").first()
+        if cat is None:
+            cat = Category(user_id=current_user.id, name="Ahorro e inversión",
+                           type="expense", bucket="invest")
+            db.session.add(cat)
+            db.session.flush()
+        db.session.add(Transaction(
+            user_id=current_user.id, type="expense", category_id=cat.id,
+            account_id=g.account_id, amount=monto, currency=g.currency,
+            description=f"Aporte a meta: {g.name}", tx_date=date.today(), bucket="invest",
+        ))
         db.session.commit()
-        flash("Aporte registrado en la meta.", "success")
+        flash("Aporte registrado en la meta y reflejado en tus transacciones.", "success")
     return redirect(url_for("main.goals"))
 
 

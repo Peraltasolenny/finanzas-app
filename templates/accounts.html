@@ -74,8 +74,8 @@
             <input type="number" step="0.01" name="interest_rate" class="form-control"></div>
           <div class="col-6"><label class="form-label small">Plazo (meses)</label>
             <input type="number" min="1" name="term_months" class="form-control"></div>
-          <div class="col-6"><label class="form-label small">Monto proyectado</label>
-            <input type="number" step="0.01" name="projected_amount" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Vencimiento</label>
+            <input type="date" name="maturity_date" class="form-control"></div>
           <div class="col-6"><label class="form-label small">Pago mínimo</label>
             <input type="number" step="0.01" name="minimum_payment" class="form-control"></div>
           <div class="col-6"><label class="form-label small">Día de pago</label>
@@ -86,6 +86,7 @@
               {% for c in categorias %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
             </select></div>
         </div>
+        <p class="text-muted small mt-1 mb-0">💡 El monto total proyectado (capital + intereses) se calcula automáticamente con la tasa y el plazo.</p>
         {% endif %}
 
         {# Certificado financiero #}
@@ -95,9 +96,8 @@
             <input type="number" min="1" name="term_months" class="form-control"></div>
           <div class="col-6"><label class="form-label small">Vencimiento</label>
             <input type="date" name="maturity_date" class="form-control"></div>
-          <div class="col-6"><label class="form-label small">Monto a vencimiento</label>
-            <input type="number" step="0.01" name="projected_amount" class="form-control"></div>
         </div>
+        <p class="text-muted small mt-1 mb-0">💡 El monto a vencimiento se calcula automáticamente con la tasa, el plazo y la capitalización.</p>
         <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="capitalizable" id="cap"><label class="form-check-label small" for="cap">Capitalizable</label></div>
         <div class="form-check"><input class="form-check-input" type="checkbox" name="early_redemption" id="er"><label class="form-check-label small" for="er">Permite redención anticipada</label></div>
         {% endif %}
