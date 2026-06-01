@@ -35,6 +35,13 @@ def _parse_iso_date(value):
         return None
 
 
+def _int_or(value, default=None):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _to_float(value, default=0.0):
     try:
         return float(str(value).replace(",", "").strip())
@@ -163,6 +170,8 @@ def transactions():
                 account_id=int(acc_id) if acc_id else None, currency=currency,
                 bucket=bucket if bucket in ("need", "want", "invest") else None,
                 amount=amount, description=desc, tx_date=tx_date,
+                merchant=request.form.get("merchant", "").strip() or None,
+                fee=_to_float(request.form.get("fee")),
             ))
             db.session.commit()
             flash("Transacción registrada.", "success")
@@ -233,6 +242,8 @@ def edit_transaction(tx_id):
         tx.bucket = b if b in ("need", "want", "invest") else None
         tx.amount = _to_float(request.form.get("amount"))
         tx.description = request.form.get("description", "").strip()
+        tx.merchant = request.form.get("merchant", "").strip() or None
+        tx.fee = _to_float(request.form.get("fee"))
         d = _parse_iso_date(request.form.get("tx_date"))
         if d:
             tx.tx_date = d
@@ -434,16 +445,29 @@ def goals():
         except ValueError:
             target_date = None
         if nombre and target > 0:
-            db.session.add(Goal(user_id=uid, name=nombre, target_amount=target,
-                                current_amount=current, target_date=target_date))
+            db.session.add(Goal(
+                user_id=uid, name=nombre, target_amount=target, current_amount=current,
+                target_date=target_date,
+                description=request.form.get("description", "").strip() or None,
+                priority=_int_or(request.form.get("priority"), 2),
+                currency=request.form.get("currency", "").strip() or None,
+                account_id=_int_or(request.form.get("account_id"), None),
+                category_id=_int_or(request.form.get("category_id"), None),
+                is_shared=request.form.get("is_shared") == "on",
+            ))
             db.session.commit()
             flash("Meta creada.", "success")
         else:
             flash("Nombre y monto objetivo son obligatorios.", "danger")
         return redirect(url_for("main.goals"))
 
-    metas = Goal.query.filter_by(user_id=uid).order_by(Goal.created_at.desc()).all()
-    return render_template("goals.html", metas=metas)
+    from models import Account
+    metas = Goal.query.filter_by(user_id=uid).order_by(
+        Goal.priority, Goal.created_at.desc()).all()
+    categorias = Category.query.filter_by(user_id=uid, is_active=True).order_by(Category.name).all()
+    accounts = Account.query.filter_by(user_id=uid, is_active=True).order_by(Account.name).all()
+    return render_template("goals.html", metas=metas, categorias=categorias,
+                           accounts=accounts, base=current_user.settings.base_currency)
 
 
 @main_bp.route("/metas/aportar/<int:goal_id>", methods=["POST"])

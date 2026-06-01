@@ -8,7 +8,8 @@ from sqlalchemy import extract, func
 
 from extensions import db
 from models import (Category, Transaction, Account, RecurringRule, ExchangeRate,
-                    PayrollDeduction, Budget, Goal, ACCOUNT_KINDS, BUCKETS)
+                    PayrollDeduction, Budget, Goal, ACCOUNT_KINDS, BUCKETS,
+                    CAPITALIZATIONS)
 import finance
 
 v2_bp = Blueprint("v2", __name__)
@@ -148,17 +149,40 @@ def _producto_view(kinds, titulo, plantilla="accounts.html"):
         kind = request.form.get("kind")
         if kind not in kinds:
             kind = kinds[0]
+        f = request.form
         acc = Account(
-            user_id=uid, name=request.form.get("name", "").strip(),
-            bank=request.form.get("bank", "").strip(), kind=kind,
-            currency=request.form.get("currency", "").strip() or current_user.settings.base_currency,
-            balance=_f(request.form.get("balance")),
-            credit_limit=_f(request.form.get("credit_limit")) or None,
-            cutoff_day=_int(request.form.get("cutoff_day")),
-            due_day=_int(request.form.get("due_day")),
-            interest_rate=_f(request.form.get("interest_rate")),
-            minimum_payment=_f(request.form.get("minimum_payment")),
-            original_amount=_f(request.form.get("original_amount")) or None,
+            user_id=uid, name=f.get("name", "").strip(),
+            bank=f.get("bank", "").strip(), kind=kind,
+            currency=f.get("currency", "").strip() or current_user.settings.base_currency,
+            balance=_f(f.get("balance")),
+            credit_limit=_f(f.get("credit_limit")) or None,
+            cutoff_day=_int(f.get("cutoff_day")),
+            due_day=_int(f.get("due_day")),
+            interest_rate=_f(f.get("interest_rate")),
+            minimum_payment=_f(f.get("minimum_payment")),
+            original_amount=_f(f.get("original_amount")) or None,
+            # capitalización
+            capitalization=f.get("capitalization", "none"),
+            capitalization_date=_date(f.get("capitalization_date")),
+            # préstamo / certificado / corretaje
+            term_months=_int(f.get("term_months")),
+            projected_amount=_f(f.get("projected_amount")) or None,
+            category_id=_int(f.get("category_id")),
+            maturity_date=_date(f.get("maturity_date")),
+            auto_renew=f.get("auto_renew") == "on",
+            capitalizable=f.get("capitalizable") == "on",
+            early_redemption=f.get("early_redemption") == "on",
+            broker=f.get("broker", "").strip() or None,
+            # complementaria
+            parent_account_id=_int(f.get("parent_account_id")),
+            recurring_amount=_f(f.get("recurring_amount")) or None,
+            recurring_day=_int(f.get("recurring_day")),
+            # tarjeta: beneficio
+            benefit_type=f.get("benefit_type", "none"),
+            benefit_detail=f.get("benefit_detail", "").strip() or None,
+            has_terminal=f.get("has_terminal") == "on",
+            # compartida
+            is_joint=f.get("is_joint") == "on",
         )
         if not acc.name:
             flash("El nombre es obligatorio.", "danger")
@@ -170,8 +194,13 @@ def _producto_view(kinds, titulo, plantilla="accounts.html"):
 
     cuentas = Account.query.filter_by(user_id=uid).filter(
         Account.kind.in_(kinds)).order_by(Account.is_active.desc(), Account.bank, Account.name).all()
+    categorias = Category.query.filter_by(user_id=uid, is_active=True).order_by(Category.name).all()
+    # Cuentas de ahorro disponibles como "principal" para complementarias.
+    parents = Account.query.filter_by(user_id=uid, is_active=True).filter(
+        Account.kind.in_(["ahorro", "corriente"])).order_by(Account.name).all()
     return render_template(plantilla, cuentas=cuentas, kinds=kinds, titulo=titulo,
-                           kind_labels=ACCOUNT_KINDS,
+                           kind_labels=ACCOUNT_KINDS, caps=CAPITALIZATIONS,
+                           categorias=categorias, parents=parents,
                            base=current_user.settings.base_currency)
 
 
@@ -197,6 +226,24 @@ def prestamos():
 @login_required
 def inversiones():
     return _producto_view(["inversion"], "Inversiones")
+
+
+@v2_bp.route("/productos/complementarias", methods=["GET", "POST"])
+@login_required
+def complementarias():
+    return _producto_view(["complementaria"], "Ahorro complementaria")
+
+
+@v2_bp.route("/productos/certificados", methods=["GET", "POST"])
+@login_required
+def certificados():
+    return _producto_view(["certificado"], "Certificados financieros")
+
+
+@v2_bp.route("/productos/corretaje", methods=["GET", "POST"])
+@login_required
+def corretaje():
+    return _producto_view(["corretaje"], "Cuentas de corretaje")
 
 
 @v2_bp.route("/productos/<int:acc_id>/eliminar", methods=["POST"])

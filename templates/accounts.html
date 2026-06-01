@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ titulo }}{% endblock %}
+{% set k = kinds[0] %}
 {% block content %}
 <h4 class="mb-4 page-title">{{ titulo }}</h4>
 <div class="row g-3">
@@ -11,33 +12,112 @@
         {% if kinds|length > 1 %}
         <div class="mb-2"><label class="form-label small">Tipo</label>
           <select name="kind" class="form-select">
-            {% for k in kinds %}<option value="{{ k }}">{{ kind_labels[k] }}</option>{% endfor %}
+            {% for kk in kinds %}<option value="{{ kk }}">{{ kind_labels[kk] }}</option>{% endfor %}
           </select></div>
-        {% else %}<input type="hidden" name="kind" value="{{ kinds[0] }}">{% endif %}
+        {% else %}<input type="hidden" name="kind" value="{{ k }}">{% endif %}
+
         <div class="mb-2"><label class="form-label small">Nombre</label>
-          <input type="text" name="name" class="form-control" placeholder="Ej. Ahorro principal" required></div>
+          <input type="text" name="name" class="form-control" required></div>
         <div class="mb-2"><label class="form-label small">Banco / entidad</label>
-          <input type="text" name="bank" class="form-control" placeholder="Ej. Popular, BHD, Qik"></div>
+          <input type="text" name="bank" class="form-control"></div>
+
+        {# Cuenta principal (solo complementaria) #}
+        {% if k == 'complementaria' %}
+        <div class="mb-2"><label class="form-label small">Cuenta principal</label>
+          <select name="parent_account_id" class="form-select">
+            <option value="">(ninguna)</option>
+            {% for p in parents %}<option value="{{ p.id }}">{{ p.name }}{% if p.bank %} — {{ p.bank }}{% endif %}</option>{% endfor %}
+          </select></div>
+        {% endif %}
+
         <div class="row g-2">
-          <div class="col-7"><label class="form-label small">{{ 'Saldo' if kinds[0] != 'prestamo' else 'Saldo pendiente' }}</label>
+          <div class="col-7"><label class="form-label small">{{ 'Saldo pendiente' if k == 'prestamo' else 'Monto actual' }}</label>
             <input type="number" step="0.01" name="balance" class="form-control"></div>
           <div class="col-5"><label class="form-label small">Moneda</label>
             <select name="currency" class="form-select">
               {% for m in monedas %}<option value="{{ m }}" {{ 'selected' if m == base }}>{{ m }}</option>{% endfor %}
             </select></div>
         </div>
-        {% if 'prestamo' in kinds %}
+
+        {# Capitalización (productos que generan interés) #}
+        {% if k in ['ahorro','corriente','complementaria','certificado','corretaje'] %}
         <div class="row g-2 mt-1">
-          <div class="col-6"><label class="form-label small">Monto original</label>
+          <div class="col-6"><label class="form-label small">Tasa anual %</label>
+            <input type="number" step="0.01" name="interest_rate" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Capitalización</label>
+            <select name="capitalization" class="form-select">
+              {% for kk, label in caps.items() %}<option value="{{ kk }}">{{ label }}</option>{% endfor %}
+            </select></div>
+          <div class="col-6"><label class="form-label small">Fecha capitalización</label>
+            <input type="date" name="capitalization_date" class="form-control"></div>
+        </div>
+        {% endif %}
+
+        {# Ahorro complementaria: aporte recurrente y proyección #}
+        {% if k == 'complementaria' %}
+        <div class="row g-2 mt-1">
+          <div class="col-6"><label class="form-label small">Aporte recurrente</label>
+            <input type="number" step="0.01" name="recurring_amount" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Día del aporte</label>
+            <input type="number" min="1" max="31" name="recurring_day" class="form-control"></div>
+          <div class="col-12"><label class="form-label small">Monto total / proyectado</label>
+            <input type="number" step="0.01" name="projected_amount" class="form-control"></div>
+        </div>
+        {% endif %}
+
+        {# Préstamo #}
+        {% if k == 'prestamo' %}
+        <div class="row g-2 mt-1">
+          <div class="col-6"><label class="form-label small">Capital / monto total</label>
             <input type="number" step="0.01" name="original_amount" class="form-control"></div>
           <div class="col-6"><label class="form-label small">Tasa anual %</label>
             <input type="number" step="0.01" name="interest_rate" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Plazo (meses)</label>
+            <input type="number" min="1" name="term_months" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Monto proyectado</label>
+            <input type="number" step="0.01" name="projected_amount" class="form-control"></div>
           <div class="col-6"><label class="form-label small">Pago mínimo</label>
             <input type="number" step="0.01" name="minimum_payment" class="form-control"></div>
           <div class="col-6"><label class="form-label small">Día de pago</label>
             <input type="number" min="1" max="31" name="due_day" class="form-control"></div>
+          <div class="col-12"><label class="form-label small">Categoría</label>
+            <select name="category_id" class="form-select">
+              <option value="">(ninguna)</option>
+              {% for c in categorias %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+            </select></div>
         </div>
         {% endif %}
+
+        {# Certificado financiero #}
+        {% if k == 'certificado' %}
+        <div class="row g-2 mt-1">
+          <div class="col-6"><label class="form-label small">Plazo (meses)</label>
+            <input type="number" min="1" name="term_months" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Vencimiento</label>
+            <input type="date" name="maturity_date" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Monto a vencimiento</label>
+            <input type="number" step="0.01" name="projected_amount" class="form-control"></div>
+        </div>
+        <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="capitalizable" id="cap"><label class="form-check-label small" for="cap">Capitalizable</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" name="early_redemption" id="er"><label class="form-check-label small" for="er">Permite redención anticipada</label></div>
+        {% endif %}
+
+        {# Cuenta de corretaje #}
+        {% if k == 'corretaje' %}
+        <div class="row g-2 mt-1">
+          <div class="col-12"><label class="form-label small">Puesto de bolsa</label>
+            <input type="text" name="broker" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Plazo total (meses)</label>
+            <input type="number" min="1" name="term_months" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Vencimiento</label>
+            <input type="date" name="maturity_date" class="form-control"></div>
+        </div>
+        <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="auto_renew" id="ar"><label class="form-check-label small" for="ar">Renovación automática</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" name="capitalizable" id="cap2"><label class="form-check-label small" for="cap2">Capitalizable</label></div>
+        {% endif %}
+
+        <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="is_joint" id="joint"><label class="form-check-label small" for="joint">Cuenta conjunta</label></div>
+
         <button class="btn btn-dark w-100 mt-3">Agregar</button>
       </form>
     </div></div>
@@ -51,11 +131,19 @@
           <h6 class="mb-1">{{ c.name }}
             <span class="badge text-bg-secondary">{{ kind_labels[c.kind] }}</span>
             {% if c.bank %}<span class="badge text-bg-light text-dark">{{ c.bank }}</span>{% endif %}
+            {% if c.is_joint %}<span class="badge text-bg-info">Conjunta</span>{% endif %}
           </h6>
           <div class="fs-5 fw-bold {{ 'txt-out' if c.is_liability else 'txt-in' }}">{{ money(c.balance, c.currency) }}</div>
-          {% if c.kind == 'prestamo' %}
-            <div class="small text-muted">Tasa: {{ '%.1f'|format(c.interest_rate) }}% · Mínimo: {{ money(c.minimum_payment, c.currency) }}{% if c.due_day %} · paga el {{ c.due_day }}{% endif %}</div>
-          {% endif %}
+          <div class="small text-muted">
+            {% if c.interest_rate %}Tasa: {{ '%.2f'|format(c.interest_rate) }}%{% endif %}
+            {% if c.capitalization and c.capitalization != 'none' %} · Cap.: {{ caps[c.capitalization] }}{% endif %}
+            {% if c.term_months %} · {{ c.term_months }} meses{% endif %}
+            {% if c.maturity_date %} · vence {{ c.maturity_date.strftime('%d/%m/%Y') }}{% endif %}
+            {% if c.broker %} · {{ c.broker }}{% endif %}
+            {% if c.projected_amount %} · proyectado {{ money(c.projected_amount, c.currency) }}{% endif %}
+            {% if c.recurring_amount %} · aporta {{ money(c.recurring_amount, c.currency) }}{% if c.recurring_day %} el {{ c.recurring_day }}{% endif %}{% endif %}
+            {% if c.kind == 'prestamo' %} · mínimo {{ money(c.minimum_payment, c.currency) }}{% if c.due_day %} · paga el {{ c.due_day }}{% endif %}{% endif %}
+          </div>
         </div>
         <form method="post" action="{{ url_for('v2.eliminar_producto', acc_id=c.id) }}"
               onsubmit="return confirm('¿Eliminar este producto?')">
