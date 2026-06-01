@@ -1,4 +1,9 @@
-"""Modelos de datos (tablas) de la app de finanzas personales."""
+"""Modelos de datos (tablas) de la app de finanzas personales.
+
+v2: multimoneda, cuentas/productos (cuentas, tarjetas, préstamos, inversiones),
+transacciones recurrentes, nómina con deducciones e ISR, salud financiera
+(necesidades/gustos/inversión) y configuración por usuario.
+"""
 from datetime import datetime, date
 
 from flask_login import UserMixin
@@ -12,6 +17,21 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 
+# Clasificación 50/30/20: a qué "cubeta" pertenece un gasto.
+BUCKETS = {"need": "Necesidad", "want": "Gusto", "invest": "Inversión"}
+
+# Tipos de producto financiero (Account.kind).
+ACCOUNT_KINDS = {
+    "ahorro": "Cuenta de ahorro",
+    "corriente": "Cuenta corriente",
+    "tarjeta": "Tarjeta de crédito",
+    "prestamo": "Préstamo",
+    "inversion": "Inversión",
+}
+# Productos que son pasivos (lo que debes): restan al patrimonio.
+LIABILITY_KINDS = {"tarjeta", "prestamo"}
+
+
 class User(UserMixin, db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
@@ -20,12 +40,9 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Gestión de usuarios (solo el admin administra a los demás).
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
-    # Un usuario archivado no puede iniciar sesión, pero sus datos se conservan.
     is_archived = db.Column(db.Boolean, nullable=False, default=False)
 
-    # Autenticación en dos pasos (TOTP, estilo Google Authenticator).
     totp_secret = db.Column(db.String(64), nullable=True)
     totp_enabled = db.Column(db.Boolean, nullable=False, default=False)
 
@@ -34,9 +51,12 @@ class User(UserMixin, db.Model):
     budgets = db.relationship("Budget", backref="user", cascade="all, delete-orphan")
     goals = db.relationship("Goal", backref="user", cascade="all, delete-orphan")
     debts = db.relationship("Debt", backref="user", cascade="all, delete-orphan")
+    accounts = db.relationship("Account", backref="user", cascade="all, delete-orphan")
+    recurring_rules = db.relationship("RecurringRule", backref="user", cascade="all, delete-orphan")
+    exchange_rates = db.relationship("ExchangeRate", backref="user", cascade="all, delete-orphan")
+    deductions = db.relationship("PayrollDeduction", backref="user", cascade="all, delete-orphan")
 
     def set_password(self, password):
-        # Hash seguro (scrypt). La contraseña en texto plano nunca se guarda.
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
@@ -44,17 +64,56 @@ class User(UserMixin, db.Model):
 
     # ---- 2FA (TOTP) ----
     def verify_totp(self, code):
-        """Valida un código de 6 dígitos contra el secreto TOTP del usuario."""
         if not self.totp_secret:
             return False
         import pyotp
         return pyotp.TOTP(self.totp_secret).verify((code or "").strip(), valid_window=1)
 
     def totp_uri(self, issuer="Mis Finanzas"):
-        """URI otpauth:// para generar el código QR de configuración."""
         import pyotp
         return pyotp.totp.TOTP(self.totp_secret).provisioning_uri(
             name=self.email, issuer_name=issuer)
+
+    @property
+    def settings(self):
+        """Devuelve (creando si hace falta) la configuración del usuario."""
+        s = UserSettings.query.filter_by(user_id=self.id).first()
+        if s is None:
+            s = UserSettings(user_id=self.id)
+            db.session.add(s)
+            db.session.commit()
+        return s
+
+
+class UserSettings(db.Model):
+    """Configuración personalizada por usuario (centralizada en /configuracion)."""
+    __tablename__ = "user_settings"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True)
+
+    # Moneda base en la que se consolidan todos los totales.
+    base_currency = db.Column(db.String(8), nullable=False, default="RD$")
+
+    # Salud financiera: metas de distribución (50/30/20 por defecto).
+    pct_need = db.Column(db.Float, nullable=False, default=50.0)
+    pct_want = db.Column(db.Float, nullable=False, default=30.0)
+    pct_invest = db.Column(db.Float, nullable=False, default=20.0)
+
+    # Nómina: salario bruto y frecuencia (para la vista de impuestos/ISR).
+    gross_salary = db.Column(db.Float, nullable=False, default=0.0)
+    salary_frequency = db.Column(db.String(12), nullable=False, default="monthly")  # monthly/biweekly
+
+
+class ExchangeRate(db.Model):
+    """Tasa de cambio manual: 1 unidad de `code` = `rate_to_base` en moneda base."""
+    __tablename__ = "exchange_rates"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    code = db.Column(db.String(8), nullable=False)            # ej. "USD"
+    rate_to_base = db.Column(db.Float, nullable=False, default=1.0)
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "code", name="uq_rate"),
+    )
 
 
 class Category(db.Model):
@@ -62,9 +121,51 @@ class Category(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     name = db.Column(db.String(80), nullable=False)
-    # "income" (ingreso) o "expense" (gasto)
-    type = db.Column(db.String(10), nullable=False, default="expense")
+    type = db.Column(db.String(10), nullable=False, default="expense")  # income/expense
     is_active = db.Column(db.Boolean, default=True)
+    # Salud financiera: cubeta sugerida (need/want/invest). Solo aplica a gastos.
+    bucket = db.Column(db.String(10), nullable=True)
+
+
+class Account(db.Model):
+    """Producto financiero: cuenta de ahorro/corriente, tarjeta, préstamo o inversión."""
+    __tablename__ = "accounts"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    bank = db.Column(db.String(120), nullable=False, default="")
+    kind = db.Column(db.String(16), nullable=False, default="ahorro")
+    currency = db.Column(db.String(8), nullable=False, default="RD$")
+    balance = db.Column(db.Float, nullable=False, default=0.0)   # saldo (o deuda si es pasivo)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    # Tarjeta de crédito
+    credit_limit = db.Column(db.Float, nullable=True)
+    cutoff_day = db.Column(db.Integer, nullable=True)
+    due_day = db.Column(db.Integer, nullable=True)
+
+    # Tarjeta / préstamo
+    interest_rate = db.Column(db.Float, nullable=False, default=0.0)  # % anual
+    minimum_payment = db.Column(db.Float, nullable=False, default=0.0)
+    original_amount = db.Column(db.Float, nullable=True)             # monto original del préstamo
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def is_liability(self):
+        return self.kind in LIABILITY_KINDS
+
+    @property
+    def utilization(self):
+        """Porcentaje de utilización de una tarjeta (saldo / límite)."""
+        if self.kind != "tarjeta" or not self.credit_limit:
+            return None
+        return min(999, round(self.balance / self.credit_limit * 100, 1))
+
+    @property
+    def available_credit(self):
+        if self.kind != "tarjeta" or self.credit_limit is None:
+            return None
+        return max(0.0, self.credit_limit - self.balance)
 
 
 class Transaction(db.Model):
@@ -72,17 +173,68 @@ class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=True)
     type = db.Column(db.String(10), nullable=False)  # income / expense
     amount = db.Column(db.Float, nullable=False, default=0.0)
+    currency = db.Column(db.String(8), nullable=True)  # None = moneda base
     description = db.Column(db.String(255), default="")
     tx_date = db.Column(db.Date, nullable=False, default=date.today)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Salud financiera: override puntual de cubeta (si None, usa la de la categoría).
+    bucket = db.Column(db.String(10), nullable=True)
+    # Si vino de una regla recurrente (para histórico; no la afecta al editar).
+    recurring_rule_id = db.Column(db.Integer, db.ForeignKey("recurring_rules.id"), nullable=True)
+
     category = db.relationship("Category")
+    account = db.relationship("Account")
+
+    @property
+    def effective_bucket(self):
+        if self.bucket:
+            return self.bucket
+        return self.category.bucket if self.category else None
+
+
+class RecurringRule(db.Model):
+    """Regla de transacción recurrente; genera transacciones reales en sus fechas."""
+    __tablename__ = "recurring_rules"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    type = db.Column(db.String(10), nullable=False, default="expense")
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=True)
+    amount = db.Column(db.Float, nullable=False, default=0.0)
+    currency = db.Column(db.String(8), nullable=True)
+    description = db.Column(db.String(255), default="")
+    bucket = db.Column(db.String(10), nullable=True)
+
+    # weekly / biweekly / monthly / yearly
+    frequency = db.Column(db.String(12), nullable=False, default="monthly")
+    day_of_month = db.Column(db.Integer, nullable=True)   # para mensual/quincenal
+    start_date = db.Column(db.Date, nullable=False, default=date.today)
+    end_date = db.Column(db.Date, nullable=True)
+    next_date = db.Column(db.Date, nullable=True)         # próxima fecha a generar
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    category = db.relationship("Category")
+    account = db.relationship("Account")
+
+
+class PayrollDeduction(db.Model):
+    """Deducción recurrente del salario (AFP, SFS, ISR u otras)."""
+    __tablename__ = "payroll_deductions"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    name = db.Column(db.String(80), nullable=False)
+    # "pct" (% del bruto), "fixed" (monto fijo) o "isr" (calculado por escala DGII)
+    kind = db.Column(db.String(10), nullable=False, default="pct")
+    value = db.Column(db.Float, nullable=False, default=0.0)  # % o monto; ignorado si kind=isr
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
 
 
 class Budget(db.Model):
-    """Monto presupuestado para una categoría en un mes/año dado."""
     __tablename__ = "budgets"
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
@@ -98,7 +250,6 @@ class Budget(db.Model):
 
 
 class Goal(db.Model):
-    """Meta de ahorro."""
     __tablename__ = "goals"
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
@@ -116,77 +267,125 @@ class Goal(db.Model):
 
 
 class Debt(db.Model):
-    """Deuda (tarjeta, préstamo, etc.)."""
+    """Deuda. (Se mantiene por compatibilidad; los préstamos/tarjetas nuevos usan Account.)"""
     __tablename__ = "debts"
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     name = db.Column(db.String(120), nullable=False)
     balance = db.Column(db.Float, nullable=False, default=0.0)
-    interest_rate = db.Column(db.Float, nullable=False, default=0.0)  # % anual
+    interest_rate = db.Column(db.Float, nullable=False, default=0.0)
     minimum_payment = db.Column(db.Float, nullable=False, default=0.0)
-    due_day = db.Column(db.Integer, nullable=True)  # día de corte/pago (1-31)
+    due_day = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-# Categorías que se crean automáticamente para un usuario nuevo.
+class DebtPayment(db.Model):
+    """Histórico de abonos a una cuenta de pasivo (tarjeta/préstamo)."""
+    __tablename__ = "debt_payments"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False)
+    amount = db.Column(db.Float, nullable=False, default=0.0)
+    balance_after = db.Column(db.Float, nullable=False, default=0.0)
+    pay_date = db.Column(db.Date, nullable=False, default=date.today)
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transactions.id"), nullable=True)
+
+    account = db.relationship("Account")
+
+
+# Categorías por defecto, ahora con cubeta (need/want/invest) sugerida.
 DEFAULT_CATEGORIES = [
-    # Ingresos
-    ("Salario", "income"),
-    ("Ingresos extra", "income"),
-    ("Ingresos pasivos", "income"),
-    # Gastos fijos
-    ("Vivienda", "expense"),
-    ("Servicios (luz, agua, internet)", "expense"),
-    ("Seguros", "expense"),
-    ("Transporte", "expense"),
-    ("Educación", "expense"),
-    ("Suscripciones", "expense"),
-    ("Pago de deudas", "expense"),
-    # Gastos variables
-    ("Supermercado", "expense"),
-    ("Comida fuera", "expense"),
-    ("Salud", "expense"),
-    ("Cuidado personal", "expense"),
-    ("Hogar", "expense"),
-    ("Ocio y entretenimiento", "expense"),
-    ("Regalos y eventos", "expense"),
-    ("Ahorro e inversión", "expense"),
+    # Ingresos (sin cubeta)
+    ("Salario", "income", None),
+    ("Ingresos extra", "income", None),
+    ("Ingresos pasivos", "income", None),
+    # Necesidades
+    ("Vivienda", "expense", "need"),
+    ("Servicios (luz, agua, internet)", "expense", "need"),
+    ("Seguros", "expense", "need"),
+    ("Transporte", "expense", "need"),
+    ("Educación", "expense", "need"),
+    ("Pago de deudas", "expense", "need"),
+    ("Supermercado", "expense", "need"),
+    ("Salud", "expense", "need"),
+    ("Hogar", "expense", "need"),
+    # Gustos
+    ("Suscripciones", "expense", "want"),
+    ("Comida fuera", "expense", "want"),
+    ("Cuidado personal", "expense", "want"),
+    ("Ocio y entretenimiento", "expense", "want"),
+    ("Regalos y eventos", "expense", "want"),
+    # Inversión
+    ("Ahorro e inversión", "expense", "invest"),
 ]
 
 
 def seed_default_categories(user):
-    for nombre, tipo in DEFAULT_CATEGORIES:
-        db.session.add(Category(user_id=user.id, name=nombre, type=tipo))
+    for nombre, tipo, bucket in DEFAULT_CATEGORIES:
+        db.session.add(Category(user_id=user.id, name=nombre, type=tipo, bucket=bucket))
+    db.session.commit()
+
+
+def seed_default_deductions(user):
+    """Plantilla dominicana de deducciones de nómina (editable)."""
+    plantilla = [
+        ("AFP (pensión)", "pct", 2.87, 1),
+        ("SFS (salud)", "pct", 3.04, 2),
+        ("ISR (impuesto sobre la renta)", "isr", 0.0, 3),
+    ]
+    for nombre, kind, value, orden in plantilla:
+        db.session.add(PayrollDeduction(
+            user_id=user.id, name=nombre, kind=kind, value=value, sort_order=orden))
     db.session.commit()
 
 
 def ensure_schema():
-    """Migración ligera: agrega columnas nuevas a 'users' si faltan y marca admin.
+    """Migración ligera: crea tablas nuevas y agrega columnas que falten.
 
-    Evita perder la base de datos existente al añadir is_admin / is_archived / 2FA.
-    Funciona en SQLite (desarrollo) y PostgreSQL (producción).
+    Funciona en SQLite (desarrollo) y PostgreSQL (producción), sin perder datos.
     """
     from sqlalchemy import inspect, text
 
+    # create_all (llamado por app.py antes) ya crea las tablas nuevas.
     insp = inspect(db.engine)
-    existing = {c["name"] for c in insp.get_columns("users")}
-    nuevas = {
+
+    def add_missing(table, columns):
+        existing = {c["name"] for c in insp.get_columns(table)}
+        changed = False
+        for col, ddl in columns.items():
+            if col not in existing:
+                db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
+                changed = True
+        return changed
+
+    cambios = False
+    cambios |= add_missing("users", {
         "is_admin": "BOOLEAN DEFAULT FALSE",
         "is_archived": "BOOLEAN DEFAULT FALSE",
         "totp_secret": "VARCHAR(64)",
         "totp_enabled": "BOOLEAN DEFAULT FALSE",
-    }
-    cambios = False
-    for col, ddl in nuevas.items():
-        if col not in existing:
-            db.session.execute(text(f"ALTER TABLE users ADD COLUMN {col} {ddl}"))
-            cambios = True
+    })
+    cambios |= add_missing("categories", {"bucket": "VARCHAR(10)"})
+    cambios |= add_missing("transactions", {
+        "account_id": "INTEGER",
+        "currency": "VARCHAR(8)",
+        "bucket": "VARCHAR(10)",
+        "recurring_rule_id": "INTEGER",
+    })
     if cambios:
         db.session.commit()
 
-    # El primer usuario (el más antiguo) queda como administrador si nadie lo es.
+    # Primer usuario => administrador.
     if not User.query.filter_by(is_admin=True).first():
         primero = User.query.order_by(User.id).first()
         if primero:
             primero.is_admin = True
             db.session.commit()
+
+    # Asegura configuración y plantilla de deducciones para usuarios existentes.
+    for u in User.query.all():
+        if UserSettings.query.filter_by(user_id=u.id).first() is None:
+            db.session.add(UserSettings(user_id=u.id))
+        if PayrollDeduction.query.filter_by(user_id=u.id).first() is None:
+            seed_default_deductions(u)
+    db.session.commit()

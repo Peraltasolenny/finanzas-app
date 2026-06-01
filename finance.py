@@ -1,0 +1,185 @@
+"""Lógica financiera central: monedas, nómina/ISR, recurrencias, salud y patrimonio."""
+import calendar
+from datetime import date, timedelta
+
+from extensions import db
+from models import (Transaction, RecurringRule, Account, ExchangeRate,
+                    LIABILITY_KINDS)
+
+
+# ----------------- multimoneda -----------------
+def get_rates(user):
+    """Dict {code: tasa_a_base}. La moneda base siempre vale 1."""
+    base = user.settings.base_currency
+    rates = {base: 1.0}
+    for r in ExchangeRate.query.filter_by(user_id=user.id).all():
+        rates[r.code] = r.rate_to_base
+    return rates
+
+
+def to_base(amount, currency, user, rates=None):
+    """Convierte `amount` (en `currency`) a la moneda base del usuario."""
+    base = user.settings.base_currency
+    if not currency or currency == base:
+        return amount
+    if rates is None:
+        rates = get_rates(user)
+    return amount * rates.get(currency, 1.0)
+
+
+# ----------------- nómina e ISR (DGII República Dominicana) -----------------
+# Escala ANUAL del ISR asalariado (DOP). Tramos: (límite_superior, tasa, base_acumulada).
+ISR_BRACKETS = [
+    (416_220.00, 0.00, 0.00),
+    (624_329.00, 0.15, 0.00),
+    (867_123.00, 0.20, 31_216.00),
+    (float("inf"), 0.25, 79_776.00),
+]
+
+
+def isr_anual(base_imponible_anual):
+    """ISR anual según la escala de la DGII sobre el ingreso anual gravable."""
+    prev_limit = 0.0
+    for i, (limit, rate, acumulado) in enumerate(ISR_BRACKETS):
+        if base_imponible_anual <= limit:
+            if i == 0:
+                return 0.0
+            exceso = base_imponible_anual - ISR_BRACKETS[i - 1][0]
+            return acumulado + exceso * rate
+        prev_limit = limit
+    return 0.0
+
+
+def compute_payroll(gross_monthly, deductions):
+    """Calcula el desglose mensual de nómina.
+
+    deductions: lista de PayrollDeduction. Las de tipo 'pct'/'fixed' se restan
+    primero (ej. AFP, SFS); el 'isr' se calcula sobre (bruto - esas deducciones).
+    Devuelve dict con líneas y neto.
+    """
+    lineas = []
+    base_no_isr = 0.0
+    isr_rows = []
+    for d in sorted(deductions, key=lambda x: x.sort_order):
+        if d.kind == "isr":
+            isr_rows.append(d)
+            continue
+        monto = (gross_monthly * d.value / 100.0) if d.kind == "pct" else d.value
+        monto = round(monto, 2)
+        base_no_isr += monto
+        lineas.append({"name": d.name, "detail": (f"{d.value:g}%" if d.kind == "pct" else "fijo"),
+                       "amount": monto})
+
+    # ISR sobre el salario gravable anualizado.
+    base_imponible_mensual = max(0.0, gross_monthly - base_no_isr)
+    isr_mes = round(isr_anual(base_imponible_mensual * 12) / 12.0, 2)
+    for d in isr_rows:
+        lineas.append({"name": d.name, "detail": "escala DGII", "amount": isr_mes})
+
+    total_deducciones = round(base_no_isr + isr_mes, 2)
+    neto = round(gross_monthly - total_deducciones, 2)
+    return {
+        "bruto": round(gross_monthly, 2),
+        "lineas": lineas,
+        "isr_mensual": isr_mes,
+        "total_deducciones": total_deducciones,
+        "neto": neto,
+        "tasa_efectiva": round(total_deducciones / gross_monthly * 100, 1) if gross_monthly else 0.0,
+    }
+
+
+# ----------------- recurrencias -----------------
+def _advance(d, frequency, day_of_month=None):
+    """Devuelve la siguiente fecha según la frecuencia."""
+    if frequency == "weekly":
+        return d + timedelta(days=7)
+    if frequency == "biweekly":
+        return d + timedelta(days=14)
+    if frequency == "yearly":
+        try:
+            return d.replace(year=d.year + 1)
+        except ValueError:  # 29 feb
+            return d.replace(year=d.year + 1, day=28)
+    # mensual: mismo día del próximo mes (ajustado al largo del mes)
+    year = d.year + (1 if d.month == 12 else 0)
+    month = 1 if d.month == 12 else d.month + 1
+    target_day = day_of_month or d.day
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(target_day, last_day))
+
+
+def generate_due_transactions(user, today=None):
+    """Materializa las transacciones recurrentes vencidas hasta hoy.
+
+    Cada transacción generada queda independiente: editarla no afecta la regla.
+    Devuelve cuántas se crearon.
+    """
+    today = today or date.today()
+    creadas = 0
+    rules = RecurringRule.query.filter_by(user_id=user.id, is_active=True).all()
+    for rule in rules:
+        nxt = rule.next_date or rule.start_date
+        # Genera todas las ocurrencias vencidas (con tope de seguridad).
+        guard = 0
+        while nxt and nxt <= today and (rule.end_date is None or nxt <= rule.end_date) and guard < 600:
+            db.session.add(Transaction(
+                user_id=user.id, type=rule.type, category_id=rule.category_id,
+                account_id=rule.account_id, amount=rule.amount, currency=rule.currency,
+                description=rule.description or "(recurrente)", tx_date=nxt,
+                bucket=rule.bucket, recurring_rule_id=rule.id,
+            ))
+            creadas += 1
+            guard += 1
+            nxt = _advance(nxt, rule.frequency, rule.day_of_month)
+        rule.next_date = nxt
+    if creadas:
+        db.session.commit()
+    return creadas
+
+
+# ----------------- salud financiera (necesidades / gustos / inversión) -----------------
+def health_breakdown(user, transactions, rates=None):
+    """Suma los gastos del periodo por cubeta y los compara con las metas %."""
+    rates = rates or get_rates(user)
+    sums = {"need": 0.0, "want": 0.0, "invest": 0.0, "sin": 0.0}
+    for t in transactions:
+        if t.type != "expense":
+            continue
+        b = t.effective_bucket or "sin"
+        sums[b] = sums.get(b, 0.0) + to_base(t.amount, t.currency, user, rates)
+    total = sums["need"] + sums["want"] + sums["invest"] + sums["sin"]
+    s = user.settings
+    metas = {"need": s.pct_need, "want": s.pct_want, "invest": s.pct_invest}
+    filas = []
+    for key, label in (("need", "Necesidades"), ("want", "Gustos"), ("invest", "Inversión")):
+        real_pct = (sums[key] / total * 100) if total > 0 else 0.0
+        filas.append({
+            "key": key, "label": label, "monto": sums[key],
+            "real_pct": round(real_pct, 1), "meta_pct": metas[key],
+            "delta": round(real_pct - metas[key], 1),
+        })
+    return {"filas": filas, "total": total, "sin_clasificar": sums["sin"]}
+
+
+# ----------------- patrimonio neto -----------------
+def net_worth(user, rates=None):
+    """Activos (cuentas/inversiones) menos pasivos (tarjetas/préstamos), en moneda base."""
+    rates = rates or get_rates(user)
+    activos = pasivos = 0.0
+    por_banco = {}
+    for a in Account.query.filter_by(user_id=user.id, is_active=True).all():
+        val = to_base(a.balance, a.currency, user, rates)
+        if a.kind in LIABILITY_KINDS:
+            pasivos += val
+            por_banco.setdefault(a.bank or "Sin banco", {"activo": 0.0, "pasivo": 0.0})
+            por_banco[a.bank or "Sin banco"]["pasivo"] += val
+        else:
+            activos += val
+            por_banco.setdefault(a.bank or "Sin banco", {"activo": 0.0, "pasivo": 0.0})
+            por_banco[a.bank or "Sin banco"]["activo"] += val
+    return {
+        "activos": round(activos, 2),
+        "pasivos": round(pasivos, 2),
+        "patrimonio": round(activos - pasivos, 2),
+        "por_banco": por_banco,
+    }
