@@ -23,13 +23,22 @@ BUCKETS = {"need": "Necesidad", "want": "Gusto", "invest": "Inversión"}
 # Tipos de producto financiero (Account.kind).
 ACCOUNT_KINDS = {
     "ahorro": "Cuenta de ahorro",
+    "complementaria": "Ahorro complementaria",
     "corriente": "Cuenta corriente",
     "tarjeta": "Tarjeta de crédito",
     "prestamo": "Préstamo",
+    "certificado": "Certificado financiero",
+    "corretaje": "Cuenta de corretaje",
     "inversion": "Inversión",
 }
 # Productos que son pasivos (lo que debes): restan al patrimonio.
 LIABILITY_KINDS = {"tarjeta", "prestamo"}
+
+# Frecuencias de capitalización de intereses.
+CAPITALIZATIONS = {
+    "none": "Sin capitalización", "daily": "Diaria", "monthly": "Mensual",
+    "quarterly": "Trimestral", "semiannual": "Semestral", "annual": "Anual",
+}
 
 
 class User(UserMixin, db.Model):
@@ -45,6 +54,10 @@ class User(UserMixin, db.Model):
 
     totp_secret = db.Column(db.String(64), nullable=True)
     totp_enabled = db.Column(db.Boolean, nullable=False, default=False)
+
+    cedula = db.Column(db.String(20), nullable=True)
+    # Familia a la que pertenece (comparten metas/gastos/patrimonio).
+    family_id = db.Column(db.Integer, db.ForeignKey("families.id"), nullable=True)
 
     categories = db.relationship("Category", backref="user", cascade="all, delete-orphan")
     transactions = db.relationship("Transaction", backref="user", cascade="all, delete-orphan")
@@ -125,6 +138,9 @@ class Category(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     # Salud financiera: cubeta sugerida (need/want/invest). Solo aplica a gastos.
     bucket = db.Column(db.String(10), nullable=True)
+    # Subcategorías: una categoría puede tener categoría padre.
+    parent_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True)
+    subcategories = db.relationship("Category", backref=db.backref("parent", remote_side=[id]))
 
 
 class Account(db.Model):
@@ -148,7 +164,43 @@ class Account(db.Model):
     interest_rate = db.Column(db.Float, nullable=False, default=0.0)  # % anual
     minimum_payment = db.Column(db.Float, nullable=False, default=0.0)
     original_amount = db.Column(db.Float, nullable=True)             # monto original del préstamo
+
+    # Capitalización de intereses (ahorro/certificado/corretaje).
+    capitalization = db.Column(db.String(12), nullable=False, default="none")
+    capitalization_date = db.Column(db.Date, nullable=True)
+
+    # Préstamo / certificado / corretaje
+    term_months = db.Column(db.Integer, nullable=True)              # plazo en meses
+    projected_amount = db.Column(db.Float, nullable=True)          # monto proyectado / a vencimiento
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True)
+    maturity_date = db.Column(db.Date, nullable=True)             # fecha de vencimiento
+    auto_renew = db.Column(db.Boolean, nullable=False, default=False)  # renovación
+    capitalizable = db.Column(db.Boolean, nullable=False, default=False)
+    early_redemption = db.Column(db.Boolean, nullable=False, default=False)  # redención anticipada
+    broker = db.Column(db.String(120), nullable=True)            # puesto de bolsa (corretaje)
+
+    # Ahorro complementaria (sub-cuenta ligada a una principal)
+    parent_account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=True)
+    recurring_amount = db.Column(db.Float, nullable=True)        # aporte recurrente
+    recurring_day = db.Column(db.Integer, nullable=True)         # día del aporte
+
+    # Tarjeta: beneficio y extras
+    benefit_type = db.Column(db.String(12), nullable=False, default="none")  # none/cashback/miles
+    benefit_detail = db.Column(db.String(120), nullable=True)   # ej. "1.5% cashback"
+    has_terminal = db.Column(db.Boolean, nullable=False, default=False)
+
+    # Cuenta compartida
+    is_joint = db.Column(db.Boolean, nullable=False, default=False)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    category = db.relationship("Category", foreign_keys=[category_id])
+    card_balances = db.relationship("CardBalance", backref="account",
+                                    cascade="all, delete-orphan", foreign_keys="CardBalance.account_id")
+    credit_lines = db.relationship("CreditLine", backref="account",
+                                   cascade="all, delete-orphan")
+    cashback_rules = db.relationship("CashbackRule", backref="account",
+                                     cascade="all, delete-orphan")
 
     @property
     def is_liability(self):
@@ -178,6 +230,8 @@ class Transaction(db.Model):
     amount = db.Column(db.Float, nullable=False, default=0.0)
     currency = db.Column(db.String(8), nullable=True)  # None = moneda base
     description = db.Column(db.String(255), default="")
+    merchant = db.Column(db.String(120), nullable=True)        # comercio
+    fee = db.Column(db.Float, nullable=False, default=0.0)      # costo por transacción
     tx_date = db.Column(db.Date, nullable=False, default=date.today)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -254,16 +308,94 @@ class Goal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     name = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
     target_amount = db.Column(db.Float, nullable=False, default=0.0)
     current_amount = db.Column(db.Float, nullable=False, default=0.0)
     target_date = db.Column(db.Date, nullable=True)
+    priority = db.Column(db.Integer, nullable=False, default=2)   # 1 alta, 2 media, 3 baja
+    currency = db.Column(db.String(8), nullable=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=True)
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True)
+    is_shared = db.Column(db.Boolean, nullable=False, default=False)  # meta familiar
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    account = db.relationship("Account")
+    category = db.relationship("Category")
 
     @property
     def progress(self):
         if self.target_amount <= 0:
             return 0
         return min(100, round(self.current_amount / self.target_amount * 100, 1))
+
+
+class CardBalance(db.Model):
+    """Sub-saldo de una tarjeta en una moneda específica (doble saldo)."""
+    __tablename__ = "card_balances"
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False)
+    currency = db.Column(db.String(8), nullable=False, default="RD$")
+    balance = db.Column(db.Float, nullable=False, default=0.0)
+    credit_limit = db.Column(db.Float, nullable=True)
+    minimum_payment = db.Column(db.Float, nullable=False, default=0.0)
+    cutoff_day = db.Column(db.Integer, nullable=True)
+    due_day = db.Column(db.Integer, nullable=True)
+
+    @property
+    def utilization(self):
+        if not self.credit_limit:
+            return None
+        return min(999, round(self.balance / self.credit_limit * 100, 1))
+
+
+class CreditLine(db.Model):
+    """Crédito extra / Credimás ligado a una tarjeta."""
+    __tablename__ = "credit_lines"
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False)
+    name = db.Column(db.String(120), nullable=False, default="Crédito extra")
+    amount = db.Column(db.Float, nullable=False, default=0.0)
+    installments = db.Column(db.Integer, nullable=True)         # cuotas
+    interest_rate = db.Column(db.Float, nullable=False, default=0.0)
+    fees = db.Column(db.Float, nullable=False, default=0.0)     # comisiones/avances
+
+
+class CashbackRule(db.Model):
+    """Regla de cashback/recompensa por categoría o comercio de una tarjeta."""
+    __tablename__ = "cashback_rules"
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True)
+    merchant = db.Column(db.String(120), nullable=True)
+    rate = db.Column(db.Float, nullable=False, default=0.0)     # % de cashback / millas por unidad
+    payout = db.Column(db.String(12), nullable=False, default="immediate")  # immediate / date
+    payout_date = db.Column(db.Date, nullable=True)
+
+    category = db.relationship("Category")
+
+
+class Family(db.Model):
+    """Grupo familiar: usuarios que comparten metas, gastos y patrimonio."""
+    __tablename__ = "families"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, default="Mi familia")
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class AccountShare(db.Model):
+    """Acceso de otro usuario a una cuenta (visibilidad / registro)."""
+    __tablename__ = "account_shares"
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    can_register = db.Column(db.Boolean, nullable=False, default=False)  # puede registrar o solo ver
+    __table_args__ = (
+        db.UniqueConstraint("account_id", "user_id", name="uq_share"),
+    )
+
+    account = db.relationship("Account", backref=db.backref("shares", cascade="all, delete-orphan"))
+    user = db.relationship("User")
 
 
 class Debt(db.Model):
@@ -364,13 +496,47 @@ def ensure_schema():
         "is_archived": "BOOLEAN DEFAULT FALSE",
         "totp_secret": "VARCHAR(64)",
         "totp_enabled": "BOOLEAN DEFAULT FALSE",
+        "cedula": "VARCHAR(20)",
+        "family_id": "INTEGER",
     })
-    cambios |= add_missing("categories", {"bucket": "VARCHAR(10)"})
+    cambios |= add_missing("categories", {
+        "bucket": "VARCHAR(10)",
+        "parent_id": "INTEGER",
+    })
     cambios |= add_missing("transactions", {
         "account_id": "INTEGER",
         "currency": "VARCHAR(8)",
         "bucket": "VARCHAR(10)",
         "recurring_rule_id": "INTEGER",
+        "merchant": "VARCHAR(120)",
+        "fee": "FLOAT DEFAULT 0",
+    })
+    cambios |= add_missing("goals", {
+        "description": "VARCHAR(255)",
+        "priority": "INTEGER DEFAULT 2",
+        "currency": "VARCHAR(8)",
+        "account_id": "INTEGER",
+        "category_id": "INTEGER",
+        "is_shared": "BOOLEAN DEFAULT FALSE",
+    })
+    cambios |= add_missing("accounts", {
+        "capitalization": "VARCHAR(12) DEFAULT 'none'",
+        "capitalization_date": "DATE",
+        "term_months": "INTEGER",
+        "projected_amount": "FLOAT",
+        "category_id": "INTEGER",
+        "maturity_date": "DATE",
+        "auto_renew": "BOOLEAN DEFAULT FALSE",
+        "capitalizable": "BOOLEAN DEFAULT FALSE",
+        "early_redemption": "BOOLEAN DEFAULT FALSE",
+        "broker": "VARCHAR(120)",
+        "parent_account_id": "INTEGER",
+        "recurring_amount": "FLOAT",
+        "recurring_day": "INTEGER",
+        "benefit_type": "VARCHAR(12) DEFAULT 'none'",
+        "benefit_detail": "VARCHAR(120)",
+        "has_terminal": "BOOLEAN DEFAULT FALSE",
+        "is_joint": "BOOLEAN DEFAULT FALSE",
     })
     if cambios:
         db.session.commit()
