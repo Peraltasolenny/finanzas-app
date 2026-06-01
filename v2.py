@@ -164,9 +164,80 @@ def nomina():
     # El cálculo del ISR es mensual; si la frecuencia es quincenal, anualizamos x2/mes.
     bruto_mensual = s.gross_salary if s.salary_frequency == "monthly" else s.gross_salary * 2
     desglose = finance.compute_payroll(bruto_mensual, deducciones)
+    accounts = Account.query.filter_by(user_id=current_user.id, is_active=True).order_by(
+        Account.name).all()
+    nominas_rec = RecurringRule.query.filter_by(
+        user_id=current_user.id, source="payroll").count()
     return render_template("nomina.html", s=s, deducciones=deducciones,
-                           desglose=desglose, kinds={"pct": "% del bruto",
-                           "fixed": "Monto fijo", "isr": "ISR (escala DGII)"})
+                           desglose=desglose, accounts=accounts, nominas_rec=nominas_rec,
+                           kinds={"pct": "% del bruto", "fixed": "Monto fijo",
+                                  "isr": "ISR (escala DGII)"})
+
+
+@v2_bp.route("/nomina/recurrencias", methods=["POST"])
+@login_required
+def generar_recurrencias_nomina():
+    """Crea recurrencias de ingreso (salario) y gastos (deducciones) desde la nómina.
+
+    Permite dividir el mes en 1 o 2 partidas (mensual o quincenal).
+    """
+    uid = current_user.id
+    s = current_user.settings
+    if s.gross_salary <= 0:
+        flash("Primero define tu salario bruto.", "danger")
+        return redirect(url_for("v2.nomina"))
+
+    parts = 2 if request.form.get("parts") == "2" else 1
+    account_id = _int(request.form.get("account_id"))
+    day1 = _int(request.form.get("day1")) or 30
+    day2 = _int(request.form.get("day2")) or 15
+    dias = [day1] if parts == 1 else [day2, day1]   # quincena: primero el 15, luego el 30
+
+    deducciones = PayrollDeduction.query.filter_by(user_id=uid).order_by(
+        PayrollDeduction.sort_order).all()
+    bruto_mensual = s.gross_salary if s.salary_frequency == "monthly" else s.gross_salary * 2
+    desglose = finance.compute_payroll(bruto_mensual, deducciones)
+
+    # Categorías de ingreso (Salario) y de deducciones.
+    cat_sal = Category.query.filter_by(user_id=uid, name="Salario", type="income").first()
+    if cat_sal is None:
+        cat_sal = Category(user_id=uid, name="Salario", type="income")
+        db.session.add(cat_sal)
+        db.session.flush()
+    cat_ded = Category.query.filter_by(user_id=uid, name="Impuestos y deducciones",
+                                       type="expense").first()
+    if cat_ded is None:
+        cat_ded = Category(user_id=uid, name="Impuestos y deducciones", type="expense", bucket="need")
+        db.session.add(cat_ded)
+        db.session.flush()
+
+    # Elimina recurrencias de nómina anteriores para regenerarlas.
+    RecurringRule.query.filter_by(user_id=uid, source="payroll").delete()
+
+    hoy = date.today()
+    base = s.base_currency
+    creadas = 0
+    for d in dias:
+        start = date(hoy.year, hoy.month, min(d, 28))
+        # Ingreso (salario) de esta partida.
+        db.session.add(RecurringRule(
+            user_id=uid, type="income", category_id=cat_sal.id, account_id=account_id,
+            amount=round(desglose["bruto"] / parts, 2), currency=base,
+            description="[Nómina] Salario", frequency="monthly", day_of_month=d,
+            start_date=start, next_date=start, source="payroll"))
+        creadas += 1
+        # Deducciones de esta partida (cada una como gasto).
+        for line in desglose["lineas"]:
+            db.session.add(RecurringRule(
+                user_id=uid, type="expense", category_id=cat_ded.id, account_id=account_id,
+                amount=round(line["amount"] / parts, 2), currency=base, bucket="need",
+                description=f"[Nómina] {line['name']}", frequency="monthly", day_of_month=d,
+                start_date=start, next_date=start, source="payroll"))
+            creadas += 1
+    db.session.commit()
+    flash(f"Se generaron {creadas} recurrencias de nómina ({parts} partida(s) al mes). "
+          f"Míralas y edítalas en Recurrentes.", "success")
+    return redirect(url_for("v2.nomina"))
 
 
 @v2_bp.route("/nomina/deduccion", methods=["POST"])

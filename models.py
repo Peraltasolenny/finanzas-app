@@ -283,6 +283,7 @@ class RecurringRule(db.Model):
     end_date = db.Column(db.Date, nullable=True)
     next_date = db.Column(db.Date, nullable=True)         # próxima fecha a generar
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    source = db.Column(db.String(16), nullable=True)      # ej. "payroll" (generada por nómina)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     category = db.relationship("Category")
@@ -524,6 +525,7 @@ def ensure_schema():
         "merchant": "VARCHAR(120)",
         "fee": "FLOAT DEFAULT 0",
     })
+    cambios |= add_missing("recurring_rules", {"source": "VARCHAR(16)"})
     cambios |= add_missing("goals", {
         "description": "VARCHAR(255)",
         "priority": "INTEGER DEFAULT 2",
