@@ -55,14 +55,17 @@
           <span class="badge {{ pr.get(g.priority, pr[2])[1] }}">{{ pr.get(g.priority, pr[2])[0] }}</span>
           {% if g.is_shared %}<span class="badge text-bg-info">Familiar</span>{% endif %}
         </h5>
-        <form method="post" action="{{ url_for('main.delete_goal', goal_id=g.id) }}"
-              onsubmit="return confirm('¿Eliminar esta meta?')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-sm btn-outline-danger">Eliminar</button>
-        </form>
+        <div class="d-inline-flex gap-1">
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.edit_goal', goal_id=g.id) }}">Editar</a>
+          <form method="post" action="{{ url_for('main.delete_goal', goal_id=g.id) }}"
+                onsubmit="return confirm('¿Eliminar esta meta?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger">Eliminar</button>
+          </form>
+        </div>
       </div>
       <div class="small text-muted mb-2">
-        {{ money(g.current_amount) }} de {{ money(g.target_amount) }}
+        {{ money(g.current_amount, g.currency) }} de {{ money(g.target_amount, g.currency) }}
         {% if g.target_date %} · meta: {{ g.target_date.strftime('%d/%m/%Y') }}{% endif %}
       </div>
       <div class="progress mb-3" style="height:18px">

@@ -478,6 +478,42 @@ def goals():
                            accounts=accounts, base=current_user.settings.base_currency)
 
 
+@main_bp.route("/metas/editar/<int:goal_id>", methods=["GET", "POST"])
+@login_required
+def edit_goal(goal_id):
+    uid = current_user.id
+    g = db.session.get(Goal, goal_id)
+    if not g or g.user_id != uid:
+        flash("Meta no encontrada.", "danger")
+        return redirect(url_for("main.goals"))
+
+    if request.method == "POST":
+        nombre = request.form.get("name", "").strip()
+        target = _to_float(request.form.get("target_amount"))
+        if not nombre or target <= 0:
+            flash("Nombre y monto objetivo son obligatorios.", "danger")
+            return redirect(url_for("main.edit_goal", goal_id=goal_id))
+        g.name = nombre
+        g.description = request.form.get("description", "").strip() or None
+        g.target_amount = target
+        g.current_amount = _to_float(request.form.get("current_amount"))
+        g.currency = request.form.get("currency", "").strip() or None
+        g.target_date = _parse_iso_date(request.form.get("target_date"))
+        g.priority = _int_or(request.form.get("priority"), 2)
+        g.account_id = _int_or(request.form.get("account_id"), None)
+        g.category_id = _int_or(request.form.get("category_id"), None)
+        g.is_shared = request.form.get("is_shared") == "on"
+        db.session.commit()
+        flash("Meta actualizada.", "success")
+        return redirect(url_for("main.goals"))
+
+    from models import Account
+    categorias = Category.query.filter_by(user_id=uid, is_active=True).order_by(Category.name).all()
+    accounts = Account.query.filter_by(user_id=uid, is_active=True).order_by(Account.name).all()
+    return render_template("goal_edit.html", g=g, categorias=categorias,
+                           accounts=accounts, base=current_user.settings.base_currency)
+
+
 @main_bp.route("/metas/aportar/<int:goal_id>", methods=["POST"])
 @login_required
 def contribute_goal(goal_id):

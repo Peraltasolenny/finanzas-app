@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Editar meta{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <h4 class="mb-3 page-title">Editar meta</h4>
+    <div class="card shadow-sm"><div class="card-body">
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-2"><label class="form-label small">Nombre</label>
+          <input type="text" name="name" value="{{ g.name }}" class="form-control" required></div>
+        <div class="mb-2"><label class="form-label small">Descripción</label>
+          <input type="text" name="description" value="{{ g.description or '' }}" class="form-control"></div>
+        <div class="row g-2">
+          <div class="col-7"><label class="form-label small">Monto objetivo</label>
+            <input type="number" step="0.01" min="0" name="target_amount" value="{{ '%.2f'|format(g.target_amount) }}" class="form-control" required></div>
+          <div class="col-5"><label class="form-label small">Moneda</label>
+            <select name="currency" class="form-select">
+              {% for m in monedas %}<option value="{{ m }}" {{ 'selected' if m == (g.currency or base) }}>{{ m }}</option>{% endfor %}
+            </select></div>
+        </div>
+        <div class="mb-2 mt-2"><label class="form-label small">Ya ahorrado</label>
+          <input type="number" step="0.01" min="0" name="current_amount" value="{{ '%.2f'|format(g.current_amount) }}" class="form-control"></div>
+        <div class="row g-2">
+          <div class="col-7"><label class="form-label small">Fecha objetivo</label>
+            <input type="date" name="target_date" value="{{ g.target_date.isoformat() if g.target_date else '' }}" class="form-control"></div>
+          <div class="col-5"><label class="form-label small">Prioridad</label>
+            <select name="priority" class="form-select">
+              <option value="1" {{ 'selected' if g.priority==1 }}>Alta</option>
+              <option value="2" {{ 'selected' if g.priority==2 }}>Media</option>
+              <option value="3" {{ 'selected' if g.priority==3 }}>Baja</option>
+            </select></div>
+        </div>
+        <div class="mb-2 mt-2"><label class="form-label small">Cuenta asociada</label>
+          <select name="account_id" class="form-select">
+            <option value="">(ninguna)</option>
+            {% for a in accounts %}<option value="{{ a.id }}" {{ 'selected' if g.account_id==a.id }}>{{ a.name }}{% if a.bank %} — {{ a.bank }}{% endif %}</option>{% endfor %}
+          </select></div>
+        <div class="mb-2"><label class="form-label small">Categoría</label>
+          <select name="category_id" class="form-select">
+            <option value="">(ninguna)</option>
+            {% for c in categorias %}<option value="{{ c.id }}" {{ 'selected' if g.category_id==c.id }}>{{ c.name }}</option>{% endfor %}
+          </select></div>
+        <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="is_shared" id="shared" {{ 'checked' if g.is_shared }}><label class="form-check-label small" for="shared">Meta familiar (compartida)</label></div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-dark">Guardar cambios</button>
+          <a class="btn btn-outline-secondary" href="{{ url_for('main.goals') }}">Cancelar</a>
+        </div>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}
