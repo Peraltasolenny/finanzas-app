@@ -30,13 +30,48 @@
     </button>
     <div class="collapse navbar-collapse" id="nav">
       <ul class="navbar-nav me-auto">
-        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.dashboard' }}" href="{{ url_for('main.dashboard') }}">Resumen</a></li>
-        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.transactions' }}" href="{{ url_for('main.transactions') }}">Transacciones</a></li>
-        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.import_statement' }}" href="{{ url_for('main.import_statement') }}">Importar</a></li>
-        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.budget' }}" href="{{ url_for('main.budget') }}">Presupuesto</a></li>
-        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.goals' }}" href="{{ url_for('main.goals') }}">Metas</a></li>
-        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.debts' }}" href="{{ url_for('main.debts') }}">Deudas</a></li>
-        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'main.categories' }}" href="{{ url_for('main.categories') }}">Categorías</a></li>
+        {# Home #}
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['main.dashboard','v2.salud'] }}" href="#" role="button" data-bs-toggle="dropdown">Home</a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.salud') }}">Salud financiera</a></li>
+          </ul>
+        </li>
+        {# Movimientos #}
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['main.transactions','v2.por_banco','main.import_statement','main.categories','v2.recurrentes'] }}" href="#" role="button" data-bs-toggle="dropdown">Movimientos</a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('main.transactions') }}">Transacciones</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.por_banco') }}">Por banco</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.recurrentes') }}">Recurrentes</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{{ url_for('main.import_statement') }}">Importar estado de cuenta</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('main.categories') }}">Categorías</a></li>
+          </ul>
+        </li>
+        {# Productos #}
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['v2.cuentas','v2.tarjetas','v2.prestamos','v2.inversiones'] }}" href="#" role="button" data-bs-toggle="dropdown">Productos</a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('v2.cuentas') }}">Cuentas de ahorro</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.tarjetas') }}">Tarjetas</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.prestamos') }}">Préstamos</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.inversiones') }}">Inversiones</a></li>
+          </ul>
+        </li>
+        {# Planeación #}
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['main.goals','main.budget','v2.proyecciones','v2.patrimonio'] }}" href="#" role="button" data-bs-toggle="dropdown">Planeación</a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('main.goals') }}">Metas</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('main.budget') }}">Presupuesto</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.proyecciones') }}">Proyecciones</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.patrimonio') }}">Patrimonio</a></li>
+          </ul>
+        </li>
+        {# Configuración #}
+        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint in ['v2.configuracion','v2.nomina'] }}" href="{{ url_for('v2.configuracion') }}">Configuración</a></li>
         {% if current_user.is_admin %}
         <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'auth.users' }}" href="{{ url_for('auth.users') }}">Usuarios</a></li>
         {% endif %}

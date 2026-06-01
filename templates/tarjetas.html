@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+<h4 class="mb-4 page-title">{{ titulo }}</h4>
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card shadow-sm"><div class="card-body">
+      <h5 class="card-title mb-3">Agregar tarjeta</h5>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="kind" value="tarjeta">
+        <div class="mb-2"><label class="form-label small">Nombre</label>
+          <input type="text" name="name" class="form-control" placeholder="Ej. Visa Qik" required></div>
+        <div class="mb-2"><label class="form-label small">Banco / entidad</label>
+          <input type="text" name="bank" class="form-control" placeholder="Ej. Qik"></div>
+        <div class="row g-2">
+          <div class="col-7"><label class="form-label small">Saldo usado</label>
+            <input type="number" step="0.01" name="balance" class="form-control"></div>
+          <div class="col-5"><label class="form-label small">Moneda</label>
+            <input type="text" name="currency" class="form-control" value="{{ base }}"></div>
+          <div class="col-7"><label class="form-label small">Límite de crédito</label>
+            <input type="number" step="0.01" name="credit_limit" class="form-control"></div>
+          <div class="col-5"><label class="form-label small">Tasa anual %</label>
+            <input type="number" step="0.01" name="interest_rate" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Día de corte</label>
+            <input type="number" min="1" max="31" name="cutoff_day" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Día de pago</label>
+            <input type="number" min="1" max="31" name="due_day" class="form-control"></div>
+          <div class="col-12"><label class="form-label small">Pago mínimo</label>
+            <input type="number" step="0.01" name="minimum_payment" class="form-control"></div>
+        </div>
+        <button class="btn btn-dark w-100 mt-3">Agregar</button>
+      </form>
+    </div></div>
+  </div>
+
+  <div class="col-lg-8">
+    {# Tablero de utilización #}
+    {% set total_lim = cuentas|selectattr('credit_limit')|map(attribute='credit_limit')|sum %}
+    {% set total_usado = cuentas|sum(attribute='balance') %}
+    <div class="card shadow-sm mb-3"><div class="card-body">
+      <h5 class="card-title mb-3">Utilización de tarjetas</h5>
+      {% if total_lim > 0 %}
+        {% set util_global = (total_usado / total_lim * 100)|round(1) %}
+        <div class="d-flex justify-content-between small mb-1">
+          <span>Utilización global</span>
+          <span>{{ money(total_usado) }} / {{ money(total_lim) }} ({{ util_global }}%)</span>
+        </div>
+        <div class="progress mb-2" style="height:18px">
+          {% set color = 'bg-success' if util_global <= 30 else ('bg-warning' if util_global <= 50 else 'bg-danger') %}
+          <div class="progress-bar {{ color }}" style="width: {{ [util_global, 100]|min }}%">{{ util_global }}%</div>
+        </div>
+        <p class="text-muted small mb-0">💡 Lo ideal es mantener la utilización por debajo del 30% para cuidar tu historial.</p>
+      {% else %}
+        <p class="text-muted mb-0">Agrega el límite de crédito de tus tarjetas para ver la utilización.</p>
+      {% endif %}
+    </div></div>
+
+    {% for c in cuentas %}
+    <div class="card shadow-sm mb-2 {{ 'opacity-50' if not c.is_active }}"><div class="card-body">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <h6 class="mb-1">{{ c.name }}{% if c.bank %} <span class="badge text-bg-light text-dark">{{ c.bank }}</span>{% endif %}</h6>
+          <div class="small text-muted">Saldo: <strong class="txt-out">{{ money(c.balance, c.currency) }}</strong>
+            {% if c.credit_limit %} · Límite: {{ money(c.credit_limit, c.currency) }} · Disponible: {{ money(c.available_credit, c.currency) }}{% endif %}
+            {% if c.due_day %} · paga el {{ c.due_day }}{% endif %}
+          </div>
+        </div>
+        <form method="post" action="{{ url_for('v2.eliminar_producto', acc_id=c.id) }}"
+              onsubmit="return confirm('¿Eliminar esta tarjeta?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-danger">Eliminar</button>
+        </form>
+      </div>
+      {% if c.utilization is not none %}
+        {% set ucolor = 'bg-success' if c.utilization <= 30 else ('bg-warning' if c.utilization <= 50 else 'bg-danger') %}
+        <div class="progress mt-2" style="height:14px">
+          <div class="progress-bar {{ ucolor }}" style="width: {{ [c.utilization, 100]|min }}%">{{ c.utilization }}%</div>
+        </div>
+      {% endif %}
+      <form method="post" action="{{ url_for('v2.abonar_producto', acc_id=c.id) }}" class="d-flex gap-2 mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="number" step="0.01" min="0" name="amount" class="form-control form-control-sm" placeholder="Registrar abono">
+        <button class="btn btn-sm btn-success">Abonar</button>
+      </form>
+    </div></div>
+    {% else %}
+      <p class="text-muted">Aún no tienes tarjetas. Agrega una a la izquierda. 👈</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

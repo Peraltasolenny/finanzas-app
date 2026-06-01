@@ -87,11 +87,32 @@
       {% else %}<p class="text-muted mb-0">Sin metas todavía. <a href="{{ url_for('main.goals') }}">Crear una</a>.</p>{% endif %}
     </div></div>
 
+    {# Distribución de gastos (necesidades / gustos / inversión) #}
+    <div class="card shadow-sm mb-3"><div class="card-body">
+      <h5 class="card-title mb-3">Distribución de gastos</h5>
+      {% if distribucion.total > 0 %}
+        {% for f in distribucion.filas %}
+        <div class="mb-2">
+          <div class="d-flex justify-content-between small mb-1">
+            <span>{{ f.label }}</span>
+            <span class="text-muted">{{ f.real_pct }}% · {{ money(f.monto) }}</span>
+          </div>
+          <div class="progress" style="height:12px">
+            {% set color = 'bg-info' if f.key=='invest' else ('bg-primary' if f.key=='need' else 'bg-warning') %}
+            <div class="progress-bar {{ color }}" style="width: {{ [f.real_pct, 100]|min }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+        <a href="{{ url_for('v2.salud') }}" class="small">Ver salud financiera →</a>
+      {% else %}<p class="text-muted mb-0">Sin gastos clasificados este mes.</p>{% endif %}
+    </div></div>
+
     <div class="card shadow-sm"><div class="card-body">
       <h5 class="card-title mb-3">Deudas</h5>
-      {% if deudas %}
+      {% if deudas or pasivos %}
         <p class="mb-1">Total: <strong class="text-danger">{{ money(total_deuda) }}</strong></p>
         <p class="text-muted small mb-0">Pago mínimo mensual: {{ money(total_pago_min) }}</p>
+        <a href="{{ url_for('v2.tarjetas') }}" class="small">Ver productos →</a>
       {% else %}<p class="text-muted mb-0">Sin deudas registradas. 🎉</p>{% endif %}
     </div></div>
   </div>

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Salud financiera{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+  <h4 class="mb-0 page-title">Salud financiera — {{ mes_nombre }} {{ year }}</h4>
+  <form method="get" class="d-flex gap-2 align-items-center">
+    <select name="month" class="form-select form-select-sm" style="width:auto">
+      {% for m in range(1, 13) %}<option value="{{ m }}" {{ 'selected' if m == month }}>{{ meses[m] }}</option>{% endfor %}
+    </select>
+    <select name="year" class="form-select form-select-sm" style="width:auto">
+      {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-sm btn-outline-secondary">Ver</button>
+  </form>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-4">
+    <div class="card kpi h-100"><div class="card-body text-center">
+      <div class="kpi-label">Puntaje de salud</div>
+      <div class="display-4 fw-bold {{ 'txt-net' if score >= 70 else ('txt-save' if score >= 40 else 'txt-out') }}">{{ score }}</div>
+      <div class="small text-muted">de 100 · {{ 'Excelente' if score >= 70 else ('Mejorable' if score >= 40 else 'Atención') }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-2"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-in"></span> Ingresos</div>
+    <div class="fw-bold txt-in">{{ money(ingresos) }}</div></div></div></div>
+  <div class="col-6 col-lg-2"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-out"></span> Gastos</div>
+    <div class="fw-bold txt-out">{{ money(gastos) }}</div></div></div></div>
+  <div class="col-6 col-lg-2"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-save"></span> Tasa ahorro</div>
+    <div class="fw-bold txt-save">{{ '%.1f'|format(tasa_ahorro) }}%</div></div></div></div>
+  <div class="col-6 col-lg-2"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label">Meta ahorro</div>
+    <div class="fw-bold">20%</div></div></div></div>
+</div>
+
+<div class="card shadow-sm"><div class="card-body">
+  <h5 class="card-title mb-3">Distribución 50 / 30 / 20 — real vs. tu meta</h5>
+  {% for f in health.filas %}
+  <div class="mb-3">
+    <div class="d-flex justify-content-between small mb-1">
+      <span class="fw-semibold">{{ f.label }}</span>
+      <span class="text-muted">{{ money(f.monto) }} · <strong>{{ f.real_pct }}%</strong> (meta {{ '%g'|format(f.meta_pct) }}%)
+        {% if f.delta > 0 %}<span class="txt-out">+{{ f.delta }}%</span>{% elif f.delta < 0 %}<span class="txt-in">{{ f.delta }}%</span>{% endif %}
+      </span>
+    </div>
+    <div class="progress" style="height:20px; position:relative">
+      {% set color = 'bg-info' if f.key=='invest' else ('bg-primary' if f.key=='need' else 'bg-warning') %}
+      <div class="progress-bar {{ color }}" style="width: {{ [f.real_pct, 100]|min }}%">{{ f.real_pct }}%</div>
+    </div>
+  </div>
+  {% endfor %}
+  {% if health.sin_clasificar > 0 %}
+    <p class="text-muted small mb-0">⚠️ {{ money(health.sin_clasificar) }} en gastos sin clasificar. Asigna un grupo a esas categorías en <a href="{{ url_for('v2.configuracion') }}">Configuración</a>.</p>
+  {% endif %}
+</div></div>
+{% endblock %}

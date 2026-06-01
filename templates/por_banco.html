@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Por banco{% endblock %}
+{% block content %}
+<h4 class="mb-4 page-title">Movimientos por banco</h4>
+
+<div class="card shadow-sm mb-3"><div class="card-body">
+  <h5 class="card-title mb-3">Saldos por banco</h5>
+  <div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead><tr><th>Banco</th><th class="text-end">Activos</th><th class="text-end">Pasivos (deuda)</th><th class="text-end">Neto</th></tr></thead>
+    <tbody>
+    {% for banco, d in nw.por_banco.items() %}
+      <tr>
+        <td class="fw-semibold">{{ banco }}</td>
+        <td class="text-end txt-in">{{ money(d.activo) }}</td>
+        <td class="text-end txt-out">{{ money(d.pasivo) }}</td>
+        <td class="text-end fw-bold">{{ money(d.activo - d.pasivo) }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="text-muted">Aún no tienes productos. Agrégalos en Productos.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr class="fw-bold border-top">
+      <td>Total</td><td class="text-end txt-in">{{ money(nw.activos) }}</td>
+      <td class="text-end txt-out">{{ money(nw.pasivos) }}</td>
+      <td class="text-end">{{ money(nw.patrimonio) }}</td>
+    </tr></tfoot>
+  </table>
+  </div>
+</div></div>
+
+<div class="card shadow-sm"><div class="card-body">
+  <h5 class="card-title mb-3">Movimientos de {{ mes }} por banco</h5>
+  <p class="text-muted small">Suma de las transacciones del mes, agrupadas por el banco de la cuenta asociada.</p>
+  <div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead><tr><th>Banco</th><th class="text-end">Ingresos</th><th class="text-end">Gastos</th><th class="text-end">Neto</th></tr></thead>
+    <tbody>
+    {% for banco, d in mov_banco.items() %}
+      <tr>
+        <td class="fw-semibold">{{ banco }}</td>
+        <td class="text-end txt-in">{{ money(d.ingresos) }}</td>
+        <td class="text-end txt-out">{{ money(d.gastos) }}</td>
+        <td class="text-end fw-bold {{ 'txt-net' if d.ingresos - d.gastos >= 0 else 'txt-out' }}">{{ money(d.ingresos - d.gastos) }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="text-muted">Sin movimientos este mes. Asocia tus transacciones a una cuenta para verlas aquí.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div></div>
+{% endblock %}

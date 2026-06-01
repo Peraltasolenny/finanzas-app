@@ -17,19 +17,28 @@ def create_app(config_class=Config):
     # Registrar modelos y blueprints
     from auth import auth_bp
     from main import main_bp
+    from v2 import v2_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
+    app.register_blueprint(v2_bp)
 
     # Formato de moneda disponible en todas las plantillas
     @app.context_processor
     def inject_helpers():
+        from flask_login import current_user
         currency = app.config.get("CURRENCY", "$")
+        # Usa la moneda base del usuario autenticado, si aplica.
+        try:
+            if current_user.is_authenticated:
+                currency = current_user.settings.base_currency
+        except Exception:
+            pass
 
-        def money(value):
+        def money(value, code=None):
             try:
-                return f"{currency} {float(value):,.2f}"
+                return f"{code or currency} {float(value):,.2f}"
             except (TypeError, ValueError):
-                return f"{currency} 0.00"
+                return f"{code or currency} 0.00"
 
         return {"money": money, "currency": currency}
 

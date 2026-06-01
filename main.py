@@ -8,6 +8,7 @@ from sqlalchemy import func, extract
 from extensions import db
 from models import Category, Transaction, Budget, Goal, Debt
 from importer import parse_statement
+import finance
 
 main_bp = Blueprint("main", __name__)
 
@@ -51,6 +52,9 @@ MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
 def dashboard():
     year, month = _parse_period()
     uid = current_user.id
+
+    # Materializa transacciones recurrentes vencidas al abrir el resumen.
+    finance.generate_due_transactions(current_user)
 
     def period_filter(q):
         return q.filter(
@@ -102,9 +106,20 @@ def dashboard():
         })
 
     metas = Goal.query.filter_by(user_id=uid).order_by(Goal.created_at.desc()).all()
+
+    # Deudas = pasivos (tarjetas/préstamos) de Productos + deudas heredadas.
+    from models import Account, LIABILITY_KINDS
+    pasivos = Account.query.filter_by(user_id=uid, is_active=True).filter(
+        Account.kind.in_(LIABILITY_KINDS)).all()
     deudas = Debt.query.filter_by(user_id=uid).order_by(Debt.balance.desc()).all()
-    total_deuda = sum(d.balance for d in deudas)
-    total_pago_min = sum(d.minimum_payment for d in deudas)
+    total_deuda = sum(d.balance for d in deudas) + sum(a.balance for a in pasivos)
+    total_pago_min = sum(d.minimum_payment for d in deudas) + sum(a.minimum_payment for a in pasivos)
+
+    # Distribución de gastos del periodo por grupo (necesidades/gustos/inversión).
+    rates = finance.get_rates(current_user)
+    period_txs = period_filter(
+        db.session.query(Transaction)).filter(Transaction.type == "expense").all()
+    distribucion = finance.health_breakdown(current_user, period_txs, rates)
 
     return render_template(
         "dashboard.html",
@@ -112,8 +127,9 @@ def dashboard():
         ingresos=ingresos, gastos=gastos, neto=neto, tasa_ahorro=tasa_ahorro,
         total_presupuestado=total_presupuestado,
         filas_presupuesto=filas_presupuesto,
-        metas=metas, deudas=deudas,
+        metas=metas, deudas=deudas, pasivos=pasivos,
         total_deuda=total_deuda, total_pago_min=total_pago_min,
+        distribucion=distribucion,
         years=list(range(date.today().year - 3, date.today().year + 2)),
     )
 
@@ -126,6 +142,9 @@ def transactions():
     if request.method == "POST":
         tipo = request.form.get("type")
         cat_id = request.form.get("category_id") or None
+        acc_id = request.form.get("account_id") or None
+        currency = request.form.get("currency", "").strip() or None
+        bucket = request.form.get("bucket") or None
         amount = _to_float(request.form.get("amount"))
         desc = request.form.get("description", "").strip()
         fecha_str = request.form.get("tx_date")
@@ -141,6 +160,8 @@ def transactions():
         else:
             db.session.add(Transaction(
                 user_id=uid, type=tipo, category_id=int(cat_id) if cat_id else None,
+                account_id=int(acc_id) if acc_id else None, currency=currency,
+                bucket=bucket if bucket in ("need", "want", "invest") else None,
                 amount=amount, description=desc, tx_date=tx_date,
             ))
             db.session.commit()
@@ -174,9 +195,12 @@ def transactions():
 
     categorias = Category.query.filter_by(
         user_id=uid, is_active=True).order_by(Category.type, Category.name).all()
+    from models import Account
+    accounts = Account.query.filter_by(user_id=uid, is_active=True).order_by(Account.name).all()
 
     return render_template(
-        "transactions.html", transactions=txs, categorias=categorias,
+        "transactions.html", transactions=txs, categorias=categorias, accounts=accounts,
+        base=current_user.settings.base_currency,
         year=year, month=month, mes_nombre=MESES[month], meses=MESES,
         hoy=date.today().isoformat(),
         years=list(range(date.today().year - 3, date.today().year + 2)),
@@ -185,6 +209,43 @@ def transactions():
         total_ingresos=total_ingresos, total_gastos=total_gastos,
         neto=total_ingresos - total_gastos,
     )
+
+
+@main_bp.route("/transacciones/editar/<int:tx_id>", methods=["GET", "POST"])
+@login_required
+def edit_transaction(tx_id):
+    """Edita una transacción puntual. Si vino de una regla recurrente, editarla
+    NO afecta la regla ni las demás ocurrencias."""
+    uid = current_user.id
+    tx = db.session.get(Transaction, tx_id)
+    if not tx or tx.user_id != uid:
+        flash("Transacción no encontrada.", "danger")
+        return redirect(url_for("main.transactions"))
+
+    if request.method == "POST":
+        tx.type = request.form.get("type") if request.form.get("type") in ("income", "expense") else tx.type
+        cat_id = request.form.get("category_id") or None
+        acc_id = request.form.get("account_id") or None
+        tx.category_id = int(cat_id) if cat_id else None
+        tx.account_id = int(acc_id) if acc_id else None
+        tx.currency = request.form.get("currency", "").strip() or None
+        b = request.form.get("bucket") or None
+        tx.bucket = b if b in ("need", "want", "invest") else None
+        tx.amount = _to_float(request.form.get("amount"))
+        tx.description = request.form.get("description", "").strip()
+        d = _parse_iso_date(request.form.get("tx_date"))
+        if d:
+            tx.tx_date = d
+        db.session.commit()
+        flash("Transacción actualizada.", "success")
+        return redirect(url_for("main.transactions", year=tx.tx_date.year, month=tx.tx_date.month))
+
+    from models import Account
+    categorias = Category.query.filter_by(user_id=uid, is_active=True).order_by(
+        Category.type, Category.name).all()
+    accounts = Account.query.filter_by(user_id=uid, is_active=True).order_by(Account.name).all()
+    return render_template("transaction_edit.html", tx=tx, categorias=categorias,
+                           accounts=accounts, base=current_user.settings.base_currency)
 
 
 # ----------------- importar estado de cuenta (OCR / CSV / Excel) -----------------

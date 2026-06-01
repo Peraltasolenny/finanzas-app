@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Patrimonio{% endblock %}
+{% block content %}
+<h4 class="mb-4 page-title">Patrimonio neto</h4>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-in"></span> Activos</div>
+    <div class="kpi-value txt-in">{{ money(nw.activos) }}</div>
+    <div class="kpi-sub">Cuentas e inversiones</div>
+  </div></div></div>
+  <div class="col-md-4"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-out"></span> Pasivos</div>
+    <div class="kpi-value txt-out">{{ money(nw.pasivos) }}</div>
+    <div class="kpi-sub">Tarjetas y préstamos</div>
+  </div></div></div>
+  <div class="col-md-4"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-net"></span> Patrimonio neto</div>
+    <div class="kpi-value {{ 'txt-net' if nw.patrimonio >= 0 else 'txt-out' }}">{{ money(nw.patrimonio) }}</div>
+    <div class="kpi-sub">Activos − Pasivos</div>
+  </div></div></div>
+</div>
+
+<div class="card shadow-sm"><div class="card-body">
+  <h5 class="card-title mb-3">Detalle de productos</h5>
+  <div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead><tr><th>Producto</th><th>Tipo</th><th>Banco</th><th class="text-end">Saldo</th><th class="text-end">En {{ base }}</th></tr></thead>
+    <tbody>
+    {% for d in detalle %}
+      <tr>
+        <td class="fw-semibold">{{ d.a.name }}</td>
+        <td>{{ kind_labels[d.a.kind] }}</td>
+        <td>{{ d.a.bank or '—' }}</td>
+        <td class="text-end {{ 'txt-out' if d.a.is_liability else 'txt-in' }}">{{ money(d.a.balance, d.a.currency) }}</td>
+        <td class="text-end {{ 'txt-out' if d.a.is_liability else 'txt-in' }}">{{ '−' if d.a.is_liability }}{{ money(d.base_val) }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="text-muted">Agrega cuentas, tarjetas, préstamos e inversiones en Productos para calcular tu patrimonio.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div></div>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Configuración{% endblock %}
+{% block content %}
+<h4 class="mb-4 page-title">Configuración</h4>
+<div class="row g-3">
+  {# Moneda base + salud financiera #}
+  <div class="col-lg-7">
+    <div class="card shadow-sm"><div class="card-body">
+      <h5 class="card-title mb-3">General</h5>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row g-2 mb-3">
+          <div class="col-sm-6">
+            <label class="form-label small">Moneda base</label>
+            <input type="text" name="base_currency" value="{{ s.base_currency }}" class="form-control" placeholder="RD$">
+            <div class="form-text">Todos los totales se consolidan en esta moneda.</div>
+          </div>
+        </div>
+        <h6 class="mt-3">Metas de salud financiera (50/30/20)</h6>
+        <p class="text-muted small">Define qué % de tus gastos quieres en cada grupo. Idealmente suman 100%.</p>
+        <div class="row g-2">
+          <div class="col-4">
+            <label class="form-label small">Necesidades %</label>
+            <input type="number" step="1" min="0" max="100" name="pct_need" value="{{ '%g'|format(s.pct_need) }}" class="form-control">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">Gustos %</label>
+            <input type="number" step="1" min="0" max="100" name="pct_want" value="{{ '%g'|format(s.pct_want) }}" class="form-control">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">Inversión %</label>
+            <input type="number" step="1" min="0" max="100" name="pct_invest" value="{{ '%g'|format(s.pct_invest) }}" class="form-control">
+          </div>
+        </div>
+
+        <h6 class="mt-4">Clasificación de categorías</h6>
+        <p class="text-muted small">Asigna cada categoría de gasto a un grupo (puedes cambiarlo por transacción luego).</p>
+        <div class="table-responsive" style="max-height:320px;overflow:auto">
+        <table class="table table-sm align-middle">
+          <thead><tr><th>Categoría</th><th style="width:160px">Grupo</th></tr></thead>
+          <tbody>
+          {% for c in categorias %}
+            <tr>
+              <td>{{ c.name }}</td>
+              <td>
+                <select name="bucket_{{ c.id }}" class="form-select form-select-sm">
+                  <option value="">(sin clasificar)</option>
+                  {% for k, label in buckets.items() %}
+                    <option value="{{ k }}" {{ 'selected' if c.bucket == k }}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        <button class="btn btn-dark mt-2">Guardar configuración</button>
+      </form>
+    </div></div>
+  </div>
+
+  {# Tasas de cambio + accesos #}
+  <div class="col-lg-5">
+    <div class="card shadow-sm mb-3"><div class="card-body">
+      <h5 class="card-title mb-3">Tasas de cambio</h5>
+      <p class="text-muted small">1 unidad de la moneda = ? en tu moneda base ({{ s.base_currency }}).</p>
+      <form method="post" action="{{ url_for('v2.guardar_tasa') }}" class="row g-2 align-items-end mb-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-5"><label class="form-label small">Moneda</label>
+          <input type="text" name="code" class="form-control form-control-sm" placeholder="USD" required></div>
+        <div class="col-5"><label class="form-label small">= {{ s.base_currency }}</label>
+          <input type="number" step="0.0001" name="rate_to_base" class="form-control form-control-sm" placeholder="60.00" required></div>
+        <div class="col-2"><button class="btn btn-sm btn-dark w-100">+</button></div>
+      </form>
+      <table class="table table-sm align-middle">
+        <tbody>
+        {% for t in tasas %}
+          <tr>
+            <td><strong>{{ t.code }}</strong></td>
+            <td>1 = {{ '%.4f'|format(t.rate_to_base) }} {{ s.base_currency }}</td>
+            <td class="text-end">
+              <form method="post" action="{{ url_for('v2.eliminar_tasa', rate_id=t.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger">×</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="text-muted small">Sin otras monedas. La base no necesita tasa.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div></div>
+
+    <div class="card shadow-sm"><div class="card-body">
+      <h5 class="card-title mb-3">Más ajustes</h5>
+      <div class="d-grid gap-2">
+        <a class="btn btn-outline-secondary" href="{{ url_for('v2.nomina') }}">💼 Nómina, salario e ISR</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('v2.recurrentes') }}">🔁 Transacciones recurrentes</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('auth.security') }}">🔒 Seguridad y 2FA</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.categories') }}">🏷️ Categorías</a>
+      </div>
+    </div></div>
+  </div>
+</div>
+{% endblock %}
