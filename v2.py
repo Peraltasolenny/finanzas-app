@@ -41,6 +41,28 @@ MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
          "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 
 
+def _add_months(d, months):
+    import calendar
+    total = d.month - 1 + months
+    year = d.year + total // 12
+    month = total % 12 + 1
+    last = calendar.monthrange(year, month)[1]
+    return date(year, month, min(d.day, last))
+
+
+def _reconciliar_fechas(acc):
+    """Calcula vencimiento desde inicio+plazo, o el plazo desde inicio+vencimiento."""
+    if acc.start_date and acc.term_months and not acc.maturity_date:
+        acc.maturity_date = _add_months(acc.start_date, acc.term_months)
+    elif acc.start_date and acc.maturity_date and not acc.term_months:
+        meses = (acc.maturity_date.year - acc.start_date.year) * 12 + \
+                (acc.maturity_date.month - acc.start_date.month)
+        acc.term_months = max(1, meses)
+    elif acc.start_date and acc.term_months and acc.maturity_date:
+        # Si ambos están, el inicio + plazo manda (la fecha se ajusta al plazo).
+        acc.maturity_date = _add_months(acc.start_date, acc.term_months)
+
+
 # ----------------- CONFIGURACIÓN -----------------
 @v2_bp.route("/configuracion", methods=["GET", "POST"])
 @login_required
@@ -195,6 +217,7 @@ def _producto_view(kinds, titulo, plantilla="accounts.html"):
             # capitalización
             capitalization=f.get("capitalization", "none"),
             capitalization_date=_date(f.get("capitalization_date")),
+            start_date=_date(f.get("start_date")),
             # préstamo / certificado / corretaje
             term_months=_int(f.get("term_months")),
             projected_amount=_f(f.get("projected_amount")) or None,
@@ -218,6 +241,8 @@ def _producto_view(kinds, titulo, plantilla="accounts.html"):
         if not acc.name:
             flash("El nombre es obligatorio.", "danger")
         else:
+            # Reconciliar fecha de inicio, plazo y vencimiento.
+            _reconciliar_fechas(acc)
             # Calcula el monto proyectado con intereses y plazo (si hay datos).
             calc = finance.projected_amount(acc)
             if calc is not None:
@@ -728,8 +753,13 @@ def simulador():
             rate = a.interest_rate
             months = a.term_months or 0
 
+    # Frecuencia del pago extra: 1=mensual, 3=4/año, 4=3/año, 12=anual.
+    freqs_extra = {"1": "Mensual", "3": "4 veces al año", "4": "3 veces al año", "12": "Anual"}
+    freq = request.args.get("freq", "1")
+    interval = _int(freq) or 1
+
     base_sim = finance.amortization(principal, rate, months) if principal and months else None
-    extra_sim = (finance.amortization(principal, rate, months, extra)
+    extra_sim = (finance.amortization(principal, rate, months, extra, interval)
                  if principal and months and extra else None)
     ahorro = None
     if base_sim and extra_sim and not base_sim.get("no_amortiza") and not extra_sim.get("no_amortiza"):
@@ -739,6 +769,7 @@ def simulador():
         }
     return render_template("simulador.html", prestamos=prestamos, sel=sel,
                            principal=principal, rate=rate, months=months, extra=extra,
+                           freq=freq, freqs_extra=freqs_extra,
                            base_sim=base_sim, extra_sim=extra_sim, ahorro=ahorro,
                            base=current_user.settings.base_currency)
 

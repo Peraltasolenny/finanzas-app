@@ -196,38 +196,39 @@ def projected_amount(account):
     return round(principal * (1 + rate * years), 2)  # interés simple
 
 
-def amortization(principal, annual_rate, months, extra=0.0):
-    """Simula un préstamo con pago extra mensual opcional.
+def amortization(principal, annual_rate, months, extra=0.0, extra_interval=1):
+    """Simula un préstamo con pagos extra opcionales.
 
+    extra: monto del pago extraordinario.
+    extra_interval: cada cuántos meses se aplica el extra (1=mensual, 3=4 veces/año,
+                    4=3 veces/año, 12=anual).
     Devuelve dict: cuota base, meses reales, total pagado, total interés.
     """
     if principal <= 0 or months <= 0:
         return None
     i = (annual_rate / 100.0) / 12.0
-    if i <= 0:
-        base_cuota = principal / months
-    else:
-        base_cuota = principal * i / (1 - (1 + i) ** (-months))
+    base_cuota = principal / months if i <= 0 else principal * i / (1 - (1 + i) ** (-months))
+    extra = max(0.0, extra)
+    interval = max(1, extra_interval)
     saldo = principal
-    pago_mensual = base_cuota + max(0.0, extra)
     total_pagado = 0.0
     meses = 0
     guard = 0
     while saldo > 0.005 and guard < 1200:
+        meses += 1
+        guard += 1
         interes = saldo * i
-        capital = pago_mensual - interes
+        extra_mes = extra if (meses % interval == 0) else 0.0
+        pago = base_cuota + extra_mes
+        capital = pago - interes
         if capital <= 0:  # el pago no cubre ni el interés
             return {"cuota": round(base_cuota, 2), "meses": None,
                     "total_pagado": None, "total_interes": None, "no_amortiza": True}
         if capital > saldo:
             capital = saldo
-            pago_real = capital + interes
-        else:
-            pago_real = pago_mensual
+            pago = capital + interes
         saldo -= capital
-        total_pagado += pago_real
-        meses += 1
-        guard += 1
+        total_pagado += pago
     return {
         "cuota": round(base_cuota, 2),
         "meses": meses,

@@ -42,16 +42,20 @@ def create_app(config_class=Config):
 
         # Monedas disponibles para los desplegables: base + las que tengan tasa.
         monedas = [currency]
+        bancos_nombres = []
         try:
             if current_user.is_authenticated:
-                from models import ExchangeRate
+                from models import ExchangeRate, Bank
                 for r in ExchangeRate.query.filter_by(user_id=current_user.id).order_by(ExchangeRate.code).all():
                     if r.code not in monedas:
                         monedas.append(r.code)
+                bancos_nombres = [b.name for b in Bank.query.filter_by(
+                    user_id=current_user.id).order_by(Bank.name).all()]
         except Exception:
             pass
 
-        return {"money": money, "currency": currency, "monedas": monedas}
+        return {"money": money, "currency": currency, "monedas": monedas,
+                "bancos_nombres": bancos_nombres}
 
     # Crear las tablas si no existen y aplicar migración ligera de columnas nuevas
     with app.app_context():

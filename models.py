@@ -180,6 +180,7 @@ class Account(db.Model):
     # Capitalización de intereses (ahorro/certificado/corretaje).
     capitalization = db.Column(db.String(12), nullable=False, default="none")
     capitalization_date = db.Column(db.Date, nullable=True)
+    start_date = db.Column(db.Date, nullable=True)   # fecha de inicio (préstamo/certificado)
 
     # Préstamo / certificado / corretaje
     term_months = db.Column(db.Integer, nullable=True)              # plazo en meses
@@ -534,6 +535,7 @@ def ensure_schema():
     cambios |= add_missing("accounts", {
         "capitalization": "VARCHAR(12) DEFAULT 'none'",
         "capitalization_date": "DATE",
+        "start_date": "DATE",
         "term_months": "INTEGER",
         "projected_amount": "FLOAT",
         "category_id": "INTEGER",

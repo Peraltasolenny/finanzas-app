@@ -96,6 +96,11 @@
 </nav>
 {% endif %}
 
+{# Lista global de bancos registrados, para vincular en cualquier campo "banco" #}
+<datalist id="bancos-list">
+  {% for nb in bancos_nombres %}<option value="{{ nb }}"></option>{% endfor %}
+</datalist>
+
 <div class="container pb-5">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}
