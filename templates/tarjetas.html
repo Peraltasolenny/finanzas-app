@@ -80,11 +80,14 @@
             {% if c.due_day %} · paga el {{ c.due_day }}{% endif %}
           </div>
         </div>
-        <form method="post" action="{{ url_for('v2.eliminar_producto', acc_id=c.id) }}"
-              onsubmit="return confirm('¿Eliminar esta tarjeta?')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-sm btn-outline-danger">Eliminar</button>
-        </form>
+        <div class="d-inline-flex gap-1">
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('v2.tarjeta_detalle', acc_id=c.id) }}">Gestionar</a>
+          <form method="post" action="{{ url_for('v2.eliminar_producto', acc_id=c.id) }}"
+                onsubmit="return confirm('¿Eliminar esta tarjeta?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger">Eliminar</button>
+          </form>
+        </div>
       </div>
       {% if c.utilization is not none %}
         {% set ucolor = 'bg-success' if c.utilization <= 30 else ('bg-warning' if c.utilization <= 50 else 'bg-danger') %}

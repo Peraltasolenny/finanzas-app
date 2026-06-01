@@ -352,8 +352,9 @@ def categories():
     if request.method == "POST":
         nombre = request.form.get("name", "").strip()
         tipo = request.form.get("type")
+        parent_id = _int_or(request.form.get("parent_id"), None)
         if nombre and tipo in ("income", "expense"):
-            db.session.add(Category(user_id=uid, name=nombre, type=tipo))
+            db.session.add(Category(user_id=uid, name=nombre, type=tipo, parent_id=parent_id))
             db.session.commit()
             flash("Categoría agregada.", "success")
         else:
@@ -362,7 +363,10 @@ def categories():
 
     ingresos = Category.query.filter_by(user_id=uid, type="income").order_by(Category.name).all()
     gastos = Category.query.filter_by(user_id=uid, type="expense").order_by(Category.name).all()
-    return render_template("categories.html", ingresos=ingresos, gastos=gastos)
+    # Posibles categorías padre (las que no son ya subcategorías).
+    padres = Category.query.filter_by(user_id=uid, parent_id=None).order_by(
+        Category.type, Category.name).all()
+    return render_template("categories.html", ingresos=ingresos, gastos=gastos, padres=padres)
 
 
 @main_bp.route("/categorias/toggle/<int:cat_id>", methods=["POST"])

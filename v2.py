@@ -9,7 +9,7 @@ from sqlalchemy import extract, func
 from extensions import db
 from models import (Category, Transaction, Account, RecurringRule, ExchangeRate,
                     PayrollDeduction, Budget, Goal, ACCOUNT_KINDS, BUCKETS,
-                    CAPITALIZATIONS)
+                    CAPITALIZATIONS, CardBalance, CreditLine, CashbackRule)
 import finance
 
 v2_bp = Blueprint("v2", __name__)
@@ -255,6 +255,113 @@ def eliminar_producto(acc_id):
         db.session.commit()
         flash("Producto eliminado.", "info")
     return redirect(request.referrer or url_for("v2.cuentas"))
+
+
+def _owned_account(acc_id):
+    a = db.session.get(Account, acc_id)
+    return a if a and a.user_id == current_user.id else None
+
+
+@v2_bp.route("/productos/tarjeta/<int:acc_id>")
+@login_required
+def tarjeta_detalle(acc_id):
+    card = _owned_account(acc_id)
+    if not card:
+        flash("Tarjeta no encontrada.", "danger")
+        return redirect(url_for("v2.tarjetas"))
+    categorias = Category.query.filter_by(
+        user_id=current_user.id, type="expense", is_active=True).order_by(Category.name).all()
+    return render_template("tarjeta_detalle.html", card=card, categorias=categorias,
+                           base=current_user.settings.base_currency)
+
+
+@v2_bp.route("/productos/tarjeta/<int:acc_id>/saldo", methods=["POST"])
+@login_required
+def agregar_saldo(acc_id):
+    card = _owned_account(acc_id)
+    if card:
+        db.session.add(CardBalance(
+            account_id=card.id,
+            currency=request.form.get("currency", "").strip() or current_user.settings.base_currency,
+            balance=_f(request.form.get("balance")),
+            credit_limit=_f(request.form.get("credit_limit")) or None,
+            minimum_payment=_f(request.form.get("minimum_payment")),
+            cutoff_day=_int(request.form.get("cutoff_day")),
+            due_day=_int(request.form.get("due_day")),
+        ))
+        db.session.commit()
+        flash("Sub-saldo agregado.", "success")
+    return redirect(url_for("v2.tarjeta_detalle", acc_id=acc_id))
+
+
+@v2_bp.route("/productos/saldo/<int:bal_id>/eliminar", methods=["POST"])
+@login_required
+def eliminar_saldo(bal_id):
+    b = db.session.get(CardBalance, bal_id)
+    if b and b.account.user_id == current_user.id:
+        acc_id = b.account_id
+        db.session.delete(b)
+        db.session.commit()
+        return redirect(url_for("v2.tarjeta_detalle", acc_id=acc_id))
+    return redirect(url_for("v2.tarjetas"))
+
+
+@v2_bp.route("/productos/tarjeta/<int:acc_id>/credito", methods=["POST"])
+@login_required
+def agregar_credito(acc_id):
+    card = _owned_account(acc_id)
+    if card:
+        db.session.add(CreditLine(
+            account_id=card.id, name=request.form.get("name", "").strip() or "Crédito extra",
+            amount=_f(request.form.get("amount")),
+            installments=_int(request.form.get("installments")),
+            interest_rate=_f(request.form.get("interest_rate")),
+            fees=_f(request.form.get("fees")),
+        ))
+        db.session.commit()
+        flash("Crédito extra agregado.", "success")
+    return redirect(url_for("v2.tarjeta_detalle", acc_id=acc_id))
+
+
+@v2_bp.route("/productos/credito/<int:line_id>/eliminar", methods=["POST"])
+@login_required
+def eliminar_credito(line_id):
+    cl = db.session.get(CreditLine, line_id)
+    if cl and cl.account.user_id == current_user.id:
+        acc_id = cl.account_id
+        db.session.delete(cl)
+        db.session.commit()
+        return redirect(url_for("v2.tarjeta_detalle", acc_id=acc_id))
+    return redirect(url_for("v2.tarjetas"))
+
+
+@v2_bp.route("/productos/tarjeta/<int:acc_id>/cashback", methods=["POST"])
+@login_required
+def agregar_cashback(acc_id):
+    card = _owned_account(acc_id)
+    if card:
+        db.session.add(CashbackRule(
+            account_id=card.id, category_id=_int(request.form.get("category_id")),
+            merchant=request.form.get("merchant", "").strip() or None,
+            rate=_f(request.form.get("rate")),
+            payout=request.form.get("payout", "immediate"),
+            payout_date=_date(request.form.get("payout_date")),
+        ))
+        db.session.commit()
+        flash("Regla de cashback agregada.", "success")
+    return redirect(url_for("v2.tarjeta_detalle", acc_id=acc_id))
+
+
+@v2_bp.route("/productos/cashback/<int:rule_id>/eliminar", methods=["POST"])
+@login_required
+def eliminar_cashback(rule_id):
+    r = db.session.get(CashbackRule, rule_id)
+    if r and r.account.user_id == current_user.id:
+        acc_id = r.account_id
+        db.session.delete(r)
+        db.session.commit()
+        return redirect(url_for("v2.tarjeta_detalle", acc_id=acc_id))
+    return redirect(url_for("v2.tarjetas"))
 
 
 @v2_bp.route("/productos/<int:acc_id>/abono", methods=["POST"])

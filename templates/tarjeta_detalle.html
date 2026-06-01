@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}{{ card.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h4 class="mb-0 page-title">{{ card.name }}
+    {% if card.bank %}<span class="badge text-bg-light text-dark">{{ card.bank }}</span>{% endif %}
+    {% if card.benefit_type != 'none' %}<span class="badge text-bg-success">{{ 'Cashback' if card.benefit_type=='cashback' else 'Millas' }}{% if card.benefit_detail %}: {{ card.benefit_detail }}{% endif %}</span>{% endif %}
+  </h4>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('v2.tarjetas') }}">← Volver a tarjetas</a>
+</div>
+
+<div class="row g-3">
+  {# Sub-saldos por moneda #}
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100"><div class="card-body">
+      <h5 class="card-title mb-3">Sub-saldos por moneda</h5>
+      <p class="text-muted small">Para tarjetas con saldos en distintas monedas (ej. RD$ y US$), cada uno con su pago mínimo y fechas.</p>
+      {% for b in card.card_balances %}
+        <div class="border rounded p-2 mb-2">
+          <div class="d-flex justify-content-between">
+            <div>
+              <strong>{{ money(b.balance, b.currency) }}</strong>
+              {% if b.credit_limit %}<span class="small text-muted">/ {{ money(b.credit_limit, b.currency) }}</span>{% endif %}
+              <div class="small text-muted">Mínimo: {{ money(b.minimum_payment, b.currency) }}{% if b.cutoff_day %} · corte {{ b.cutoff_day }}{% endif %}{% if b.due_day %} · paga {{ b.due_day }}{% endif %}</div>
+            </div>
+            <form method="post" action="{{ url_for('v2.eliminar_saldo', bal_id=b.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger">×</button>
+            </form>
+          </div>
+          {% if b.utilization is not none %}
+            {% set uc = 'bg-success' if b.utilization <= 30 else ('bg-warning' if b.utilization <= 50 else 'bg-danger') %}
+            <div class="progress mt-1" style="height:12px"><div class="progress-bar {{ uc }}" style="width: {{ [b.utilization,100]|min }}%">{{ b.utilization }}%</div></div>
+          {% endif %}
+        </div>
+      {% else %}<p class="text-muted small">Sin sub-saldos. Agrega uno abajo.</p>{% endfor %}
+      <form method="post" action="{{ url_for('v2.agregar_saldo', acc_id=card.id) }}" class="row g-2 mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-4"><label class="form-label small mb-0">Moneda</label>
+          <select name="currency" class="form-select form-select-sm">{% for m in monedas %}<option {{ 'selected' if m==base }}>{{ m }}</option>{% endfor %}</select></div>
+        <div class="col-4"><label class="form-label small mb-0">Saldo</label><input type="number" step="0.01" name="balance" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small mb-0">Límite</label><input type="number" step="0.01" name="credit_limit" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small mb-0">Mínimo</label><input type="number" step="0.01" name="minimum_payment" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small mb-0">Corte</label><input type="number" min="1" max="31" name="cutoff_day" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small mb-0">Pago</label><input type="number" min="1" max="31" name="due_day" class="form-control form-control-sm"></div>
+        <div class="col-12"><button class="btn btn-sm btn-dark w-100">Agregar sub-saldo</button></div>
+      </form>
+    </div></div>
+  </div>
+
+  {# Crédito extra (Credimás) #}
+  <div class="col-lg-6">
+    <div class="card shadow-sm mb-3"><div class="card-body">
+      <h5 class="card-title mb-3">Crédito extra (Credimás)</h5>
+      {% for cl in card.credit_lines %}
+        <div class="d-flex justify-content-between align-items-center border-bottom py-1">
+          <div>
+            <strong>{{ cl.name }}</strong> — {{ money(cl.amount) }}
+            <div class="small text-muted">{% if cl.installments %}{{ cl.installments }} cuotas · {% endif %}{{ '%.1f'|format(cl.interest_rate) }}%{% if cl.fees %} · fees {{ money(cl.fees) }}{% endif %}</div>
+          </div>
+          <form method="post" action="{{ url_for('v2.eliminar_credito', line_id=cl.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger">×</button>
+          </form>
+        </div>
+      {% else %}<p class="text-muted small">Sin créditos extra.</p>{% endfor %}
+      <form method="post" action="{{ url_for('v2.agregar_credito', acc_id=card.id) }}" class="row g-2 mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-6"><label class="form-label small mb-0">Nombre</label><input type="text" name="name" class="form-control form-control-sm" placeholder="Credimás"></div>
+        <div class="col-6"><label class="form-label small mb-0">Monto</label><input type="number" step="0.01" name="amount" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small mb-0">Cuotas</label><input type="number" name="installments" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small mb-0">Tasa %</label><input type="number" step="0.01" name="interest_rate" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small mb-0">Fees</label><input type="number" step="0.01" name="fees" class="form-control form-control-sm"></div>
+        <div class="col-12"><button class="btn btn-sm btn-dark w-100">Agregar crédito</button></div>
+      </form>
+    </div></div>
+
+    {# Cashback #}
+    <div class="card shadow-sm"><div class="card-body">
+      <h5 class="card-title mb-3">Reglas de cashback / recompensa</h5>
+      {% for r in card.cashback_rules %}
+        <div class="d-flex justify-content-between align-items-center border-bottom py-1">
+          <div class="small">
+            <strong>{{ '%.2f'|format(r.rate) }}%</strong> en
+            {{ r.category.name if r.category else (r.merchant or 'todo') }}
+            <span class="text-muted">· {{ 'inmediato' if r.payout=='immediate' else ('paga ' + r.payout_date.strftime('%d/%m/%Y')) if r.payout_date else 'a fecha' }}</span>
+          </div>
+          <form method="post" action="{{ url_for('v2.eliminar_cashback', rule_id=r.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger">×</button>
+          </form>
+        </div>
+      {% else %}<p class="text-muted small">Sin reglas de cashback.</p>{% endfor %}
+      <form method="post" action="{{ url_for('v2.agregar_cashback', acc_id=card.id) }}" class="row g-2 mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-6"><label class="form-label small mb-0">Categoría</label>
+          <select name="category_id" class="form-select form-select-sm"><option value="">(cualquiera)</option>{% for c in categorias %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
+        <div class="col-6"><label class="form-label small mb-0">o Comercio</label><input type="text" name="merchant" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small mb-0">% / tasa</label><input type="number" step="0.01" name="rate" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small mb-0">Pago</label>
+          <select name="payout" class="form-select form-select-sm"><option value="immediate">Inmediato</option><option value="date">A fecha</option></select></div>
+        <div class="col-4"><label class="form-label small mb-0">Fecha</label><input type="date" name="payout_date" class="form-control form-control-sm"></div>
+        <div class="col-12"><button class="btn btn-sm btn-dark w-100">Agregar cashback</button></div>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

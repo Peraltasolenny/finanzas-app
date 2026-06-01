@@ -12,11 +12,18 @@
           <label class="form-label small">Nombre</label>
           <input type="text" name="name" class="form-control" required>
         </div>
-        <div class="mb-3">
+        <div class="mb-2">
           <label class="form-label small">Tipo</label>
           <select name="type" class="form-select">
             <option value="expense">Gasto</option>
             <option value="income">Ingreso</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small">Subcategoría de (opcional)</label>
+          <select name="parent_id" class="form-select">
+            <option value="">(es categoría principal)</option>
+            {% for p in padres %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
           </select>
         </div>
         <button class="btn btn-dark w-100">Agregar</button>
