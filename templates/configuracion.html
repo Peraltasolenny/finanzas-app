@@ -12,7 +12,11 @@
         <div class="row g-2 mb-3">
           <div class="col-sm-6">
             <label class="form-label small">Moneda base</label>
-            <input type="text" name="base_currency" value="{{ s.base_currency }}" class="form-control" placeholder="RD$">
+            {% set comunes = ['RD$', 'US$', 'USD', 'EUR', 'MXN', 'COP'] %}
+            <select name="base_currency" class="form-select">
+              {% if s.base_currency not in comunes %}<option value="{{ s.base_currency }}" selected>{{ s.base_currency }}</option>{% endif %}
+              {% for m in comunes %}<option value="{{ m }}" {{ 'selected' if m == s.base_currency }}>{{ m }}</option>{% endfor %}
+            </select>
             <div class="form-text">Todos los totales se consolidan en esta moneda.</div>
           </div>
         </div>

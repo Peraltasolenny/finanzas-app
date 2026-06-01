@@ -59,7 +59,9 @@
       </div>
       <div class="col-sm-3 col-lg-2">
         <label class="form-label small mb-0">Moneda</label>
-        <input type="text" name="currency" value="{{ base }}" class="form-control form-control-sm">
+        <select name="currency" class="form-select form-select-sm">
+          {% for m in monedas %}<option value="{{ m }}" {{ 'selected' if m == base }}>{{ m }}</option>{% endfor %}
+        </select>
       </div>
       <div class="col-12 col-lg-5">
         <span class="small text-muted">Asocia el estado de cuenta a una de tus cuentas/tarjetas para que los movimientos se vean en <strong>Por banco</strong> y se conviertan a tu moneda base. <a href="{{ url_for('v2.cuentas') }}">¿No tienes cuentas?</a></span>

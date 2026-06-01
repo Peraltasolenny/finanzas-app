@@ -17,7 +17,9 @@
           <div class="col-7"><label class="form-label small">Saldo usado</label>
             <input type="number" step="0.01" name="balance" class="form-control"></div>
           <div class="col-5"><label class="form-label small">Moneda</label>
-            <input type="text" name="currency" class="form-control" value="{{ base }}"></div>
+            <select name="currency" class="form-select">
+              {% for m in monedas %}<option value="{{ m }}" {{ 'selected' if m == base }}>{{ m }}</option>{% endfor %}
+            </select></div>
           <div class="col-7"><label class="form-label small">Límite de crédito</label>
             <input type="number" step="0.01" name="credit_limit" class="form-control"></div>
           <div class="col-5"><label class="form-label small">Tasa anual %</label>
