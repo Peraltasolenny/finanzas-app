@@ -39,6 +39,22 @@ def create_app(config_class=Config):
         db.create_all()
         models.ensure_schema()
 
+        # Diagnóstico: deja claro en los logs a qué base de datos se conecta.
+        # Si dice "sqlite" en Render, los datos se borrarán al dormir la app:
+        # falta configurar DATABASE_URL (Neon) en Environment Variables.
+        uri = app.config["SQLALCHEMY_DATABASE_URI"]
+        backend = uri.split("://", 1)[0]
+        host = uri.split("@")[-1].split("/")[0] if "@" in uri else "archivo local"
+        try:
+            n_users = models.User.query.count()
+        except Exception:
+            n_users = "?"
+        print(f"[FINANZAS] Base de datos: {backend} | host: {host} | usuarios: {n_users}",
+              flush=True)
+        if backend.startswith("sqlite"):
+            print("[FINANZAS] ⚠️  Usando SQLite LOCAL. En Render esto se borra al reiniciar. "
+                  "Configura DATABASE_URL (Neon) en Environment Variables.", flush=True)
+
     return app
 
 
