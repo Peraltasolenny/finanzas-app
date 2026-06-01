@@ -31,4 +31,42 @@
     <button class="btn btn-dark">Guardar presupuesto</button>
   </form>
 </div></div>
+
+{# Histórico: presupuestado vs. gastado (últimos 6 meses) #}
+<div class="card shadow-sm mt-3"><div class="card-body">
+  <h5 class="card-title mb-3">Histórico: presupuestado vs. gastado</h5>
+  <div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead><tr>
+      <th>Mes</th><th class="text-end">Presupuestado</th><th class="text-end">Gastado</th>
+      <th class="text-end">Diferencia</th><th style="width:30%">Uso</th>
+    </tr></thead>
+    <tbody>
+    {% for h in historico %}
+      <tr>
+        <td class="fw-semibold">{{ h.label }}</td>
+        <td class="text-end">{{ money(h.presupuestado) }}</td>
+        <td class="text-end">{{ money(h.gastado) }}</td>
+        <td class="text-end {{ 'txt-in' if h.presupuestado - h.gastado >= 0 else 'txt-out' }}">
+          {{ money(h.presupuestado - h.gastado) }}
+        </td>
+        <td>
+          {% if h.pct is not none %}
+            {% set color = 'bg-success' if h.pct <= 80 else ('bg-warning' if h.pct <= 100 else 'bg-danger') %}
+            <div class="progress" style="height:18px">
+              <div class="progress-bar {{ color }}" style="width: {{ [h.pct, 100]|min }}%">{{ '%.0f'|format(h.pct) }}%</div>
+            </div>
+          {% elif h.gastado > 0 %}
+            <span class="text-muted small">gastado sin presupuesto</span>
+          {% else %}
+            <span class="text-muted small">—</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="text-muted small mb-0">🟢 ≤80% · 🟡 hasta 100% · 🔴 te pasaste del presupuesto. Los gastos en otras monedas se convierten a {{ currency }}.</p>
+</div></div>
 {% endblock %}

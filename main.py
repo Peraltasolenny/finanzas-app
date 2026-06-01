@@ -393,10 +393,29 @@ def budget():
         for b in Budget.query.filter_by(user_id=uid, year=year, month=month).all()
     }
     total = sum(presupuestos.values())
+
+    # Histórico: presupuestado vs. gastado de los últimos 6 meses (hasta el seleccionado).
+    rates = finance.get_rates(current_user)
+    historico = []
+    for i in range(5, -1, -1):
+        y = year + (month - 1 - i) // 12
+        m = (month - 1 - i) % 12 + 1
+        presup = db.session.query(func.coalesce(func.sum(Budget.amount), 0.0)).filter_by(
+            user_id=uid, year=y, month=m).scalar() or 0.0
+        txs = Transaction.query.filter(
+            Transaction.user_id == uid, Transaction.type == "expense",
+            extract("year", Transaction.tx_date) == y,
+            extract("month", Transaction.tx_date) == m).all()
+        gastado = sum(finance.to_base(t.amount, t.currency, current_user, rates) for t in txs)
+        pct = (gastado / presup * 100) if presup > 0 else None
+        historico.append({"label": f"{MESES[m][:3]} {y}", "presupuestado": presup,
+                          "gastado": gastado, "pct": pct})
+
     return render_template(
         "budget.html", categorias=categorias, presupuestos=presupuestos,
         total=total, year=year, month=month, mes_nombre=MESES[month], meses=MESES,
         years=list(range(date.today().year - 3, date.today().year + 2)),
+        historico=historico,
     )
 
 
