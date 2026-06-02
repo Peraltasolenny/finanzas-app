@@ -60,6 +60,7 @@
             <td class="text-end fw-bold {{ 'txt-in' if r.type=='income' else 'txt-out' }}">{{ money(r.amount, r.currency) }}</td>
             <td class="text-end">
               <div class="d-inline-flex gap-1">
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('v2.editar_recurrente', rule_id=r.id) }}">Editar</a>
                 <form method="post" action="{{ url_for('v2.toggle_recurrente', rule_id=r.id) }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button class="btn btn-sm btn-outline-secondary">{{ 'Pausar' if r.is_active else 'Activar' }}</button>

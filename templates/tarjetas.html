@@ -1,109 +1,115 @@
 {% extends "base.html" %}
 {% block title %}{{ titulo }}{% endblock %}
 {% block content %}
-<h4 class="mb-4 page-title">{{ titulo }}</h4>
-<div class="row g-3">
-  <div class="col-lg-4">
-    <div class="card shadow-sm"><div class="card-body">
-      <h5 class="card-title mb-3">Agregar tarjeta</h5>
-      <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="kind" value="tarjeta">
-        <div class="mb-2"><label class="form-label small">Nombre</label>
-          <input type="text" name="name" class="form-control" placeholder="Ej. Visa Qik" required></div>
-        <div class="mb-2"><label class="form-label small">Banco / entidad</label>
-          <input type="text" name="bank" class="form-control" list="bancos-list" placeholder="Elige o escribe un banco"></div>
-        <div class="row g-2">
-          <div class="col-7"><label class="form-label small">Saldo usado</label>
-            <input type="number" step="0.01" name="balance" class="form-control"></div>
-          <div class="col-5"><label class="form-label small">Moneda</label>
-            <select name="currency" class="form-select">
-              {% for m in monedas %}<option value="{{ m }}" {{ 'selected' if m == base }}>{{ m }}</option>{% endfor %}
-            </select></div>
-          <div class="col-7"><label class="form-label small">Límite de crédito</label>
-            <input type="number" step="0.01" name="credit_limit" class="form-control"></div>
-          <div class="col-5"><label class="form-label small">Tasa anual %</label>
-            <input type="number" step="0.01" name="interest_rate" class="form-control"></div>
-          <div class="col-6"><label class="form-label small">Día de corte</label>
-            <input type="number" min="1" max="31" name="cutoff_day" class="form-control"></div>
-          <div class="col-6"><label class="form-label small">Día de pago</label>
-            <input type="number" min="1" max="31" name="due_day" class="form-control"></div>
-          <div class="col-12"><label class="form-label small">Pago mínimo</label>
-            <input type="number" step="0.01" name="minimum_payment" class="form-control"></div>
-        </div>
-        <div class="row g-2 mt-1">
-          <div class="col-6"><label class="form-label small">Beneficio</label>
-            <select name="benefit_type" class="form-select">
-              <option value="none">Ninguno</option>
-              <option value="cashback">Cashback</option>
-              <option value="miles">Millas</option>
-            </select></div>
-          <div class="col-6"><label class="form-label small">Detalle</label>
-            <input type="text" name="benefit_detail" class="form-control" placeholder="Ej. 1.5% / 1 milla x RD$"></div>
-        </div>
-        <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="has_terminal" id="term"><label class="form-check-label small" for="term">Tiene terminal (acepta pagos)</label></div>
-        <p class="text-muted small mt-2 mb-0">Tras crear la tarjeta podrás agregarle <strong>sub-saldos por moneda</strong>, <strong>crédito extra (Credimás)</strong> y <strong>reglas de cashback</strong>.</p>
-        <button class="btn btn-dark w-100 mt-3">Agregar</button>
-      </form>
-    </div></div>
-  </div>
-
-  <div class="col-lg-8">
-    {# Tablero de utilización #}
-    {% set total_lim = cuentas|selectattr('credit_limit')|map(attribute='credit_limit')|sum %}
-    {% set total_usado = cuentas|sum(attribute='balance') %}
-    <div class="card shadow-sm mb-3"><div class="card-body">
-      <h5 class="card-title mb-3">Utilización de tarjetas</h5>
-      {% if total_lim > 0 %}
-        {% set util_global = (total_usado / total_lim * 100)|round(1) %}
-        <div class="d-flex justify-content-between small mb-1">
-          <span>Utilización global</span>
-          <span>{{ money(total_usado) }} / {{ money(total_lim) }} ({{ util_global }}%)</span>
-        </div>
-        <div class="progress mb-2" style="height:18px">
-          {% set color = 'bg-success' if util_global <= 30 else ('bg-warning' if util_global <= 50 else 'bg-danger') %}
-          <div class="progress-bar {{ color }}" style="width: {{ [util_global, 100]|min }}%">{{ util_global }}%</div>
-        </div>
-        <p class="text-muted small mb-0">💡 Lo ideal es mantener la utilización por debajo del 30% para cuidar tu historial.</p>
-      {% else %}
-        <p class="text-muted mb-0">Agrega el límite de crédito de tus tarjetas para ver la utilización.</p>
-      {% endif %}
-    </div></div>
-
-    {% for c in cuentas %}
-    <div class="card shadow-sm mb-2 {{ 'opacity-50' if not c.is_active }}"><div class="card-body">
-      <div class="d-flex justify-content-between align-items-start">
-        <div>
-          <h6 class="mb-1">{{ c.name }}{% if c.bank %} <span class="badge text-bg-light text-dark">{{ c.bank }}</span>{% endif %}</h6>
-          <div class="small text-muted">Saldo: <strong class="txt-out">{{ money(c.balance, c.currency) }}</strong>
-            {% if c.credit_limit %} · Límite: {{ money(c.credit_limit, c.currency) }} · Disponible: {{ money(c.available_credit, c.currency) }}{% endif %}
-            {% if c.due_day %} · paga el {{ c.due_day }}{% endif %}
-          </div>
-        </div>
-        <div class="d-inline-flex gap-1">
-          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('v2.tarjeta_detalle', acc_id=c.id) }}">Gestionar</a>
-          <form method="post" action="{{ url_for('v2.eliminar_producto', acc_id=c.id) }}"
-                onsubmit="return confirm('¿Eliminar esta tarjeta?')">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-sm btn-outline-danger">Eliminar</button>
-          </form>
-        </div>
-      </div>
-      {% if c.utilization is not none %}
-        {% set ucolor = 'bg-success' if c.utilization <= 30 else ('bg-warning' if c.utilization <= 50 else 'bg-danger') %}
-        <div class="progress mt-2" style="height:14px">
-          <div class="progress-bar {{ ucolor }}" style="width: {{ [c.utilization, 100]|min }}%">{{ c.utilization }}%</div>
-        </div>
-      {% endif %}
-      <form method="post" action="{{ url_for('v2.abonar_producto', acc_id=c.id) }}" class="d-flex gap-2 mt-2">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="number" step="0.01" min="0" name="amount" class="form-control form-control-sm" placeholder="Registrar abono">
-        <button class="btn btn-sm btn-success">Abonar</button>
-      </form>
-    </div></div>
-    {% else %}
-      <p class="text-muted">Aún no tienes tarjetas. Agrega una a la izquierda. 👈</p>
-    {% endfor %}
-  </div>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h4 class="mb-0 page-title">{{ titulo }}</h4>
+  <button class="btn btn-dark btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#formTarjeta">+ Agregar tarjeta</button>
 </div>
+
+{# Formulario colapsable #}
+<div class="collapse mb-3" id="formTarjeta">
+  <div class="card shadow-sm"><div class="card-body">
+    <form method="post" class="row g-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="kind" value="tarjeta">
+      <div class="col-md-4"><label class="form-label small">Nombre</label>
+        <input type="text" name="name" class="form-control" placeholder="Ej. Visa Qik" required></div>
+      <div class="col-md-4"><label class="form-label small">Banco / entidad</label>
+        <input type="text" name="bank" class="form-control" list="bancos-list" placeholder="Elige o escribe"></div>
+      <div class="col-md-2"><label class="form-label small">Saldo usado</label>
+        <input type="number" step="0.01" name="balance" class="form-control"></div>
+      <div class="col-md-2"><label class="form-label small">Moneda</label>
+        <select name="currency" class="form-select">{% for m in monedas %}<option {{ 'selected' if m == base }}>{{ m }}</option>{% endfor %}</select></div>
+      <div class="col-md-3"><label class="form-label small">Límite de crédito</label>
+        <input type="number" step="0.01" name="credit_limit" class="form-control"></div>
+      <div class="col-md-3"><label class="form-label small">Tasa anual %</label>
+        <input type="number" step="0.01" name="interest_rate" class="form-control"></div>
+      <div class="col-md-2"><label class="form-label small">Día de corte</label>
+        <input type="number" min="1" max="31" name="cutoff_day" class="form-control"></div>
+      <div class="col-md-2"><label class="form-label small">Día de pago</label>
+        <input type="number" min="1" max="31" name="due_day" class="form-control"></div>
+      <div class="col-md-2"><label class="form-label small">Pago mínimo</label>
+        <input type="number" step="0.01" name="minimum_payment" class="form-control"></div>
+      <div class="col-md-4"><label class="form-label small">Beneficio</label>
+        <select name="benefit_type" class="form-select">
+          <option value="none">Ninguno</option><option value="cashback">Cashback</option><option value="miles">Millas</option>
+        </select></div>
+      <div class="col-md-6"><label class="form-label small">Detalle del beneficio</label>
+        <input type="text" name="benefit_detail" class="form-control" placeholder="Ej. 1.5% / 1 milla x RD$"></div>
+      <div class="col-md-2 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="has_terminal" id="term"><label class="form-check-label small" for="term">Terminal</label></div></div>
+      <div class="col-12"><p class="text-muted small mb-1">Tras crear podrás agregar <strong>sub-saldos por moneda</strong>, <strong>Credimás</strong> y <strong>cashback</strong> en "Gestionar".</p>
+        <button class="btn btn-dark">Agregar tarjeta</button></div>
+    </form>
+  </div></div>
+</div>
+
+{# Totales #}
+{% set total_lim = cuentas|selectattr('credit_limit')|map(attribute='credit_limit')|sum %}
+{% set total_usado = cuentas|sum(attribute='balance') %}
+{% set total_min = cuentas|sum(attribute='minimum_payment') %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-out"></span> Deuda vigente</div>
+    <div class="fw-bold txt-out">{{ money(total_usado) }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-out"></span> Pago mínimo total</div>
+    <div class="fw-bold">{{ money(total_min) }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-net"></span> Límite total</div>
+    <div class="fw-bold">{{ money(total_lim) }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-save"></span> Utilización global</div>
+    {% set util_global = (total_usado / total_lim * 100)|round(1) if total_lim > 0 else 0 %}
+    <div class="fw-bold {{ 'txt-out' if util_global > 50 else '' }}">{{ util_global }}%</div></div></div></div>
+</div>
+{% if total_lim > 0 %}
+<div class="card shadow-sm mb-3"><div class="card-body py-2">
+  {% set color = 'bg-success' if util_global <= 30 else ('bg-warning' if util_global <= 50 else 'bg-danger') %}
+  <div class="progress" style="height:16px"><div class="progress-bar {{ color }}" style="width: {{ [util_global,100]|min }}%">{{ util_global }}%</div></div>
+  <p class="text-muted small mb-0 mt-1">💡 Mantén la utilización por debajo del 30% para cuidar tu historial.</p>
+</div></div>
+{% endif %}
+
+{# Lista de tarjetas #}
+{% for c in cuentas %}
+<div class="card shadow-sm mb-2 {{ 'opacity-50' if not c.is_active }}"><div class="card-body">
+  <div class="d-flex justify-content-between align-items-start">
+    <div>
+      <h6 class="mb-1">{{ c.name }}
+        {% if c.bank %}<span class="badge text-bg-light text-dark">{{ c.bank }}</span>{% endif %}
+        {% if c.benefit_type != 'none' %}<span class="badge text-bg-success">{{ 'Cashback' if c.benefit_type=='cashback' else 'Millas' }}{% if c.benefit_detail %}: {{ c.benefit_detail }}{% endif %}</span>{% endif %}
+        {% if c.has_terminal %}<span class="badge text-bg-secondary">Terminal</span>{% endif %}
+      </h6>
+      <div class="small text-muted">
+        Saldo: <strong class="txt-out">{{ money(c.balance, c.currency) }}</strong>
+        {% if c.credit_limit %} · Límite: {{ money(c.credit_limit, c.currency) }} · Disponible: {{ money(c.available_credit, c.currency) }}{% endif %}
+      </div>
+      <div class="small text-muted">
+        {% if c.minimum_payment %}Mínimo: {{ money(c.minimum_payment, c.currency) }}{% endif %}
+        {% if c.cutoff_day %} · corte día {{ c.cutoff_day }}{% endif %}
+        {% if c.due_day %} · pago día {{ c.due_day }}{% endif %}
+        {% if c.interest_rate %} · {{ '%.1f'|format(c.interest_rate) }}% anual{% endif %}
+      </div>
+    </div>
+    <div class="d-inline-flex gap-1">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('v2.tarjeta_detalle', acc_id=c.id) }}">Gestionar</a>
+      <form method="post" action="{{ url_for('v2.eliminar_producto', acc_id=c.id) }}" onsubmit="return confirm('¿Eliminar esta tarjeta?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-danger">Eliminar</button>
+      </form>
+    </div>
+  </div>
+  {% if c.utilization is not none %}
+    {% set ucolor = 'bg-success' if c.utilization <= 30 else ('bg-warning' if c.utilization <= 50 else 'bg-danger') %}
+    <div class="progress mt-2" style="height:14px"><div class="progress-bar {{ ucolor }}" style="width: {{ [c.utilization, 100]|min }}%">{{ c.utilization }}%</div></div>
+  {% endif %}
+  <form method="post" action="{{ url_for('v2.abonar_producto', acc_id=c.id) }}" class="d-flex gap-2 mt-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="number" step="0.01" min="0" name="amount" class="form-control form-control-sm" placeholder="Registrar abono">
+    <button class="btn btn-sm btn-success">Abonar</button>
+  </form>
+</div></div>
+{% else %}
+  <p class="text-muted">Aún no tienes tarjetas. Usa "+ Agregar tarjeta". 👆</p>
+{% endfor %}
 {% endblock %}

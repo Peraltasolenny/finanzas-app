@@ -338,7 +338,7 @@ def _producto_view(kinds, titulo, plantilla="accounts.html"):
 @v2_bp.route("/productos/cuentas", methods=["GET", "POST"])
 @login_required
 def cuentas():
-    return _producto_view(["ahorro", "corriente"], "Cuentas de ahorro")
+    return _producto_view(["ahorro", "corriente"], "Cuentas")
 
 
 @v2_bp.route("/productos/tarjetas", methods=["GET", "POST"])
@@ -683,6 +683,41 @@ def recurrentes():
     freqs = {"weekly": "Semanal", "biweekly": "Quincenal", "monthly": "Mensual", "yearly": "Anual"}
     return render_template("recurrentes.html", reglas=reglas, categorias=categorias,
                            accounts=accounts, freqs=freqs, hoy=date.today().isoformat())
+
+
+@v2_bp.route("/recurrentes/<int:rule_id>/editar", methods=["GET", "POST"])
+@login_required
+def editar_recurrente(rule_id):
+    r = db.session.get(RecurringRule, rule_id)
+    if not r or r.user_id != current_user.id:
+        flash("Regla no encontrada.", "danger")
+        return redirect(url_for("v2.recurrentes"))
+    uid = current_user.id
+    if request.method == "POST":
+        r.type = request.form.get("type", r.type)
+        r.category_id = _int(request.form.get("category_id"))
+        r.account_id = _int(request.form.get("account_id"))
+        r.amount = _f(request.form.get("amount"))
+        r.description = request.form.get("description", "").strip()
+        r.frequency = request.form.get("frequency", r.frequency)
+        nuevo_inicio = _date(request.form.get("start_date"))
+        if nuevo_inicio:
+            r.start_date = nuevo_inicio
+            r.day_of_month = nuevo_inicio.day
+            # Si la próxima fecha quedó antes del nuevo inicio, ajústala.
+            if not r.next_date or r.next_date < nuevo_inicio:
+                r.next_date = nuevo_inicio
+        r.end_date = _date(request.form.get("end_date"))
+        db.session.commit()
+        flash("Regla recurrente actualizada (las transacciones ya generadas no cambian).", "success")
+        return redirect(url_for("v2.recurrentes"))
+
+    categorias = Category.query.filter_by(user_id=uid, is_active=True).order_by(
+        Category.type, Category.name).all()
+    accounts = Account.query.filter_by(user_id=uid, is_active=True).order_by(Account.name).all()
+    freqs = {"weekly": "Semanal", "biweekly": "Quincenal", "monthly": "Mensual", "yearly": "Anual"}
+    return render_template("recurrente_edit.html", r=r, categorias=categorias,
+                           accounts=accounts, freqs=freqs)
 
 
 @v2_bp.route("/recurrentes/<int:rule_id>/toggle", methods=["POST"])

@@ -54,7 +54,7 @@
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['v2.cuentas','v2.complementarias','v2.tarjetas','v2.prestamos','v2.certificados','v2.corretaje','v2.inversiones'] }}" href="#" role="button" data-bs-toggle="dropdown">Productos</a>
           <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="{{ url_for('v2.cuentas') }}">Cuentas de ahorro</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.cuentas') }}">Cuentas</a></li>
             <li><a class="dropdown-item" href="{{ url_for('v2.complementarias') }}">Ahorro complementaria</a></li>
             <li><a class="dropdown-item" href="{{ url_for('v2.tarjetas') }}">Tarjetas</a></li>
             <li><a class="dropdown-item" href="{{ url_for('v2.prestamos') }}">Préstamos</a></li>

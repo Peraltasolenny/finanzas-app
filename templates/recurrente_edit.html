@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Editar recurrencia{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <h4 class="mb-3 page-title">Editar recurrencia</h4>
+    {% if r.source == 'payroll' %}<div class="alert alert-info small">Esta recurrencia fue generada por Nómina. Si regeneras la nómina se reemplazará.</div>{% endif %}
+    <div class="card shadow-sm"><div class="card-body">
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-2"><label class="form-label small">Tipo</label>
+          <select name="type" class="form-select">
+            <option value="expense" {{ 'selected' if r.type=='expense' }}>Gasto</option>
+            <option value="income" {{ 'selected' if r.type=='income' }}>Ingreso</option>
+          </select></div>
+        <div class="mb-2"><label class="form-label small">Categoría</label>
+          <select name="category_id" class="form-select">
+            <option value="">(sin categoría)</option>
+            {% for c in categorias %}<option value="{{ c.id }}" {{ 'selected' if r.category_id==c.id }}>{{ c.name }}</option>{% endfor %}
+          </select></div>
+        <div class="mb-2"><label class="form-label small">Cuenta</label>
+          <select name="account_id" class="form-select">
+            <option value="">(ninguna)</option>
+            {% for a in accounts %}<option value="{{ a.id }}" {{ 'selected' if r.account_id==a.id }}>{{ a.name }}{% if a.bank %} — {{ a.bank }}{% endif %}</option>{% endfor %}
+          </select></div>
+        <div class="row g-2">
+          <div class="col-6"><label class="form-label small">Monto</label>
+            <input type="number" step="0.01" min="0" name="amount" value="{{ '%.2f'|format(r.amount) }}" class="form-control" required></div>
+          <div class="col-6"><label class="form-label small">Frecuencia</label>
+            <select name="frequency" class="form-select">
+              {% for k, label in freqs.items() %}<option value="{{ k }}" {{ 'selected' if r.frequency==k }}>{{ label }}</option>{% endfor %}
+            </select></div>
+          <div class="col-6"><label class="form-label small">Desde</label>
+            <input type="date" name="start_date" value="{{ r.start_date.isoformat() if r.start_date else '' }}" class="form-control"></div>
+          <div class="col-6"><label class="form-label small">Hasta (opcional)</label>
+            <input type="date" name="end_date" value="{{ r.end_date.isoformat() if r.end_date else '' }}" class="form-control"></div>
+        </div>
+        <div class="mb-3 mt-2"><label class="form-label small">Descripción</label>
+          <input type="text" name="description" value="{{ r.description }}" class="form-control"></div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-dark">Guardar cambios</button>
+          <a class="btn btn-outline-secondary" href="{{ url_for('v2.recurrentes') }}">Cancelar</a>
+        </div>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}
