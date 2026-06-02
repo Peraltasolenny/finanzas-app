@@ -197,40 +197,52 @@ def transactions():
     d_to = _parse_iso_date(request.args.get("hasta"))
     rango_activo = bool(d_from or d_to)
 
-    q = Transaction.query.filter(Transaction.user_id == uid)
-    if rango_activo:
-        if d_from:
-            q = q.filter(Transaction.tx_date >= d_from)
-        if d_to:
-            q = q.filter(Transaction.tx_date <= d_to)
-    else:
-        q = q.filter(
-            extract("year", Transaction.tx_date) == year,
-            extract("month", Transaction.tx_date) == month,
-        )
-    txs = q.order_by(Transaction.tx_date.desc(), Transaction.id.desc()).all()
+    # Filtros adicionales.
+    f_cur = request.args.get("cur") or None
+    f_acc = _int_or(request.args.get("cuenta"), None)
+    f_cat = _int_or(request.args.get("categoria"), None)
+    f_bank = request.args.get("banco") or None
+    f_text = request.args.get("q") or None
+    filtros_activos = rango_activo or any([f_cur, f_acc, f_cat, f_bank, f_text])
 
-    # Totales del conjunto mostrado.
-    total_ingresos = sum(t.amount for t in txs if t.type == "income")
-    total_gastos = sum(t.amount for t in txs if t.type == "expense")
+    q = Transaction.query.filter(Transaction.user_id == uid)
+    if not rango_activo:
+        q = q.filter(extract("year", Transaction.tx_date) == year,
+                     extract("month", Transaction.tx_date) == month)
+        d_from = d_from or date(year, month, 1)
+        d_to = d_to or date(year, month, 28)
+    q = reports.filter_txs(q, d_from or date(year, month, 1), d_to or date.today(),
+                           currency=f_cur, account_id=f_acc, bank=f_bank,
+                           category_id=f_cat, text=f_text)
+    txs = sorted(q, key=lambda t: (t.tx_date, t.id), reverse=True)
+
+    # Totales del conjunto mostrado (convertidos a base).
+    rates = finance.get_rates(current_user)
+    total_ingresos = sum(finance.to_base(t.amount, t.currency, current_user, rates)
+                         for t in txs if t.type == "income")
+    total_gastos = sum(finance.to_base(t.amount, t.currency, current_user, rates)
+                       for t in txs if t.type == "expense")
 
     categorias = Category.query.filter_by(
         user_id=uid, is_active=True).order_by(Category.type, Category.name).all()
     from models import Account, AccountShare
     accounts = Account.query.filter_by(user_id=uid, is_active=True).order_by(Account.name).all()
-    # Más las cuentas que me compartieron con permiso de registrar.
     for sh in AccountShare.query.filter_by(user_id=uid, can_register=True).all():
         if sh.account and sh.account.is_active:
             accounts.append(sh.account)
+    bancos = sorted({a.bank for a in accounts if a.bank})
+    distribucion_pie = reports.expense_distribution(current_user, txs, rates)
 
     return render_template(
         "transactions.html", transactions=txs, categorias=categorias, accounts=accounts,
-        base=current_user.settings.base_currency,
+        bancos=bancos, base=current_user.settings.base_currency,
+        monedas=reports_monedas(current_user), distribucion_pie=distribucion_pie,
         year=year, month=month, mes_nombre=MESES[month], meses=MESES,
         hoy=date.today().isoformat(),
         years=list(range(date.today().year - 3, date.today().year + 2)),
         desde=request.args.get("desde", ""), hasta=request.args.get("hasta", ""),
-        rango_activo=rango_activo,
+        rango_activo=rango_activo, filtros_activos=filtros_activos,
+        f_cur=f_cur or "", f_acc=f_acc, f_cat=f_cat, f_bank=f_bank or "", f_text=f_text or "",
         total_ingresos=total_ingresos, total_gastos=total_gastos,
         neto=total_ingresos - total_gastos,
     )

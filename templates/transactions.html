@@ -6,25 +6,37 @@
   {% if not rango_activo %}{% include "_period.html" %}{% endif %}
 </div>
 
-{# Filtro por rango de fechas #}
+{# Filtros #}
 <div class="card shadow-sm mb-3"><div class="card-body py-2">
   <form method="get" class="row g-2 align-items-end">
-    <div class="col-auto">
-      <label class="form-label small mb-0">Desde</label>
-      <input type="date" name="desde" value="{{ desde }}" class="form-control form-control-sm">
-    </div>
-    <div class="col-auto">
-      <label class="form-label small mb-0">Hasta</label>
-      <input type="date" name="hasta" value="{{ hasta }}" class="form-control form-control-sm">
-    </div>
-    <div class="col-auto">
-      <button class="btn btn-sm btn-dark">Filtrar por rango</button>
-    </div>
-    {% if rango_activo %}
-    <div class="col-auto">
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.transactions') }}">Limpiar</a>
-    </div>
-    {% endif %}
+    <div class="col-6 col-md-auto"><label class="form-label small mb-0">Desde</label>
+      <input type="date" name="desde" value="{{ desde }}" class="form-control form-control-sm"></div>
+    <div class="col-6 col-md-auto"><label class="form-label small mb-0">Hasta</label>
+      <input type="date" name="hasta" value="{{ hasta }}" class="form-control form-control-sm"></div>
+    <div class="col-6 col-md-auto"><label class="form-label small mb-0">Cuenta</label>
+      <select name="cuenta" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for a in accounts %}<option value="{{ a.id }}" {{ 'selected' if f_acc == a.id }}>{{ a.name }}</option>{% endfor %}
+      </select></div>
+    <div class="col-6 col-md-auto"><label class="form-label small mb-0">Banco</label>
+      <select name="banco" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for b in bancos %}<option value="{{ b }}" {{ 'selected' if f_bank == b }}>{{ b }}</option>{% endfor %}
+      </select></div>
+    <div class="col-6 col-md-auto"><label class="form-label small mb-0">Categoría</label>
+      <select name="categoria" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for c in categorias %}<option value="{{ c.id }}" {{ 'selected' if f_cat == c.id }}>{{ c.name }}</option>{% endfor %}
+      </select></div>
+    <div class="col-6 col-md-auto"><label class="form-label small mb-0">Moneda</label>
+      <select name="cur" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for m in monedas %}<option value="{{ m }}" {{ 'selected' if f_cur == m }}>{{ m }}</option>{% endfor %}
+      </select></div>
+    <div class="col-12 col-md"><label class="form-label small mb-0">Buscar (descripción/comercio)</label>
+      <input type="text" name="q" value="{{ f_text }}" class="form-control form-control-sm"></div>
+    <div class="col-auto"><button class="btn btn-sm btn-dark">Filtrar</button></div>
+    {% if filtros_activos %}<div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.transactions') }}">Limpiar</a></div>{% endif %}
   </form>
 </div></div>
 
@@ -43,6 +55,21 @@
     <div class="fw-bold {{ 'txt-net' if neto >= 0 else 'txt-out' }}">{{ money(neto) }}</div>
   </div></div></div>
 </div>
+
+{% if distribucion_pie.labels %}
+<div class="card shadow-sm mb-3"><div class="card-body">
+  <h6 class="card-title mb-2">Distribución de gastos (según filtros)</h6>
+  <canvas id="chartPieTx" height="90"></canvas>
+</div></div>
+<script>
+  new Chart(document.getElementById('chartPieTx'), {
+    type: 'doughnut',
+    data: { labels: {{ distribucion_pie.labels|tojson }}, datasets: [{ data: {{ distribucion_pie.valores|tojson }},
+      backgroundColor: ['#7c5cff','#22c55e','#ef4444','#f59e0b','#06b6d4','#ec4899','#8b5cf6','#14b8a6','#f97316','#64748b'] }] },
+    options: { plugins: { legend: { position: 'right', labels: { color:'#9aa', boxWidth:12 } } } }
+  });
+</script>
+{% endif %}
 
 <div class="row g-3">
   <div class="col-lg-4">
