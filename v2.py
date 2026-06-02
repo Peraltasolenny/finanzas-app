@@ -577,15 +577,72 @@ def salud():
     ingresos = sum(finance.to_base(t.amount, t.currency, current_user, rates)
                    for t in txs if t.type == "income")
     gastos = health["total"]
-    tasa_ahorro = ((ingresos - gastos) / ingresos * 100) if ingresos > 0 else 0.0
-    # Puntaje simple de salud (0-100): cercanía a metas + tasa de ahorro positiva.
-    desvio = sum(abs(f["delta"]) for f in health["filas"])
-    score = max(0, min(100, round(100 - desvio / 2 + (10 if ingresos > gastos else -10))))
+    neto = ingresos - gastos
+    tasa_ahorro = (neto / ingresos * 100) if ingresos > 0 else 0.0
+
+    # Ahorro líquido = cuentas de ahorro/corriente, convertido a base.
+    ahorro_liquido = sum(
+        finance.to_base(a.balance, a.currency, current_user, rates)
+        for a in Account.query.filter_by(user_id=current_user.id, is_active=True)
+        .filter(Account.kind.in_(["ahorro", "corriente"])).all())
+
+    # Gasto promedio mensual (últimos 3 meses).
+    sumg = cont = 0
+    for i in range(3):
+        y = year + (month - 1 - i) // 12
+        m = (month - 1 - i) % 12 + 1
+        mt = Transaction.query.filter(
+            Transaction.user_id == current_user.id, Transaction.type == "expense",
+            extract("year", Transaction.tx_date) == y,
+            extract("month", Transaction.tx_date) == m).all()
+        g = sum(finance.to_base(t.amount, t.currency, current_user, rates) for t in mt)
+        if g > 0:
+            sumg += g
+            cont += 1
+    gasto_prom = (sumg / cont) if cont else gastos
+
+    # Deuda y pagos mínimos.
+    from models import LIABILITY_KINDS, Debt
+    pasivos = Account.query.filter_by(user_id=current_user.id, is_active=True).filter(
+        Account.kind.in_(LIABILITY_KINDS)).all()
+    deudas = Debt.query.filter_by(user_id=current_user.id).all()
+    pago_min = sum(finance.to_base(a.minimum_payment, a.currency, current_user, rates) for a in pasivos) \
+        + sum(d.minimum_payment for d in deudas)
+
+    # Métricas.
+    cobertura_meses = round(ahorro_liquido / gasto_prom, 1) if gasto_prom > 0 else 0.0
+    carga_deuda = round(pago_min / ingresos * 100, 1) if ingresos > 0 else 0.0
+    flujo_libre = round(neto - pago_min, 2)
+
+    # Puntaje (0-100): ahorro (40) + emergencia (30) + deuda (30).
+    p_ahorro = min(40, max(0, tasa_ahorro / 20 * 40))
+    p_emerg = min(30, cobertura_meses / 6 * 30)
+    p_deuda = 30 * (1 - min(carga_deuda, 50) / 50)
+    score = max(0, min(100, round(p_ahorro + p_emerg + p_deuda)))
+    estado = ("Excelente" if score >= 75 else "Bien" if score >= 50
+              else "Mejorable" if score >= 30 else "Atención")
+
+    # Sugerencias.
+    sugerencias = []
+    if tasa_ahorro < 20:
+        sugerencias.append(f"Tu tasa de ahorro es {tasa_ahorro:.1f}%. Apunta al menos al 20%: revisa gastos en 'Gustos'.")
+    if cobertura_meses < 3:
+        sugerencias.append(f"Tu fondo de emergencia cubre {cobertura_meses} meses. Lo ideal son 3 a 6 meses de gastos.")
+    if carga_deuda > 35:
+        sugerencias.append(f"Tus pagos de deuda son {carga_deuda:.0f}% de tus ingresos (alto). Intenta bajar de 35%.")
+    if health["sin_clasificar"] > 0:
+        sugerencias.append("Tienes gastos sin clasificar; asígnales un grupo en Configuración para una mejor lectura.")
+    if not sugerencias:
+        sugerencias.append("¡Vas muy bien! Mantén tu tasa de ahorro y tu fondo de emergencia.")
+
     return render_template("salud.html", health=health, year=year, month=month,
                            meses=MESES, mes_nombre=MESES[month],
                            years=list(range(hoy.year - 3, hoy.year + 2)),
                            ingresos=ingresos, gastos=gastos, tasa_ahorro=tasa_ahorro,
-                           score=score, s=current_user.settings,
+                           score=score, estado=estado, sugerencias=sugerencias,
+                           ahorro_liquido=ahorro_liquido, gasto_prom=gasto_prom,
+                           cobertura_meses=cobertura_meses, carga_deuda=carga_deuda,
+                           flujo_libre=flujo_libre, s=current_user.settings,
                            base=current_user.settings.base_currency)
 
 

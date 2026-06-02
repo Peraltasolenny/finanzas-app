@@ -15,25 +15,61 @@
 </div>
 
 <div class="row g-3 mb-4">
-  <div class="col-12 col-lg-4">
-    <div class="card kpi h-100"><div class="card-body text-center">
-      <div class="kpi-label">Puntaje de salud</div>
-      <div class="display-4 fw-bold {{ 'txt-net' if score >= 70 else ('txt-save' if score >= 40 else 'txt-out') }}">{{ score }}</div>
-      <div class="small text-muted">de 100 · {{ 'Excelente' if score >= 70 else ('Mejorable' if score >= 40 else 'Atención') }}</div>
+  {# Índice de salud como gráfico circular #}
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100"><div class="card-body text-center">
+      <h5 class="card-title mb-2">Índice de salud</h5>
+      <div style="position:relative; max-width:220px; margin:0 auto">
+        <canvas id="gauge" height="200"></canvas>
+        <div style="position:absolute; top:58%; left:0; right:0; transform:translateY(-50%)">
+          <div class="display-5 fw-bold {{ 'txt-net' if score >= 75 else ('txt-save' if score >= 50 else 'txt-out') }}">{{ score }}</div>
+          <div class="small text-muted">{{ estado }}</div>
+        </div>
+      </div>
     </div></div>
   </div>
-  <div class="col-6 col-lg-2"><div class="card kpi h-100"><div class="card-body">
-    <div class="kpi-label"><span class="dot dot-in"></span> Ingresos</div>
-    <div class="fw-bold txt-in">{{ money(ingresos) }}</div></div></div></div>
-  <div class="col-6 col-lg-2"><div class="card kpi h-100"><div class="card-body">
-    <div class="kpi-label"><span class="dot dot-out"></span> Gastos</div>
-    <div class="fw-bold txt-out">{{ money(gastos) }}</div></div></div></div>
-  <div class="col-6 col-lg-2"><div class="card kpi h-100"><div class="card-body">
-    <div class="kpi-label"><span class="dot dot-save"></span> Tasa ahorro</div>
-    <div class="fw-bold txt-save">{{ '%.1f'|format(tasa_ahorro) }}%</div></div></div></div>
-  <div class="col-6 col-lg-2"><div class="card kpi h-100"><div class="card-body">
-    <div class="kpi-label">Meta ahorro</div>
-    <div class="fw-bold">20%</div></div></div></div>
+
+  {# Qué significa + sugerencias #}
+  <div class="col-lg-8">
+    <div class="card shadow-sm h-100"><div class="card-body">
+      <h5 class="card-title mb-2">¿Qué significa tu puntaje?</h5>
+      <p class="small text-muted">El índice combina tu <strong>tasa de ahorro</strong> (40 pts), tu <strong>cobertura de emergencia</strong> (30 pts) y tu <strong>carga de deuda</strong> (30 pts).
+        Tu estado es <strong>{{ estado }}</strong>
+        {% if score >= 75 %}— tus finanzas están sólidas.
+        {% elif score >= 50 %}— vas bien, con espacio para mejorar.
+        {% elif score >= 30 %}— hay aspectos importantes que atender.
+        {% else %}— conviene actuar pronto sobre ahorro y deuda.{% endif %}
+      </p>
+      <h6 class="mt-3">Sugerencias para mejorar</h6>
+      <ul class="small mb-0">
+        {% for s in sugerencias %}<li>{{ s }}</li>{% endfor %}
+      </ul>
+    </div></div>
+  </div>
+</div>
+
+{# Tarjetas de métricas #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-save"></span> Tasa de ahorro</div>
+    <div class="kpi-value txt-save">{{ '%.1f'|format(tasa_ahorro) }}%</div>
+    <div class="kpi-sub">Meta: 20%</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-out"></span> Carga de deuda</div>
+    <div class="kpi-value {{ 'txt-out' if carga_deuda > 35 else '' }}">{{ '%.1f'|format(carga_deuda) }}%</div>
+    <div class="kpi-sub">Pagos / ingresos · ideal &lt;35%</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-net"></span> Cobertura de emergencia</div>
+    <div class="kpi-value {{ 'txt-net' if cobertura_meses >= 3 else 'txt-save' }}">{{ cobertura_meses }} meses</div>
+    <div class="kpi-sub">Ahorro líquido / gasto mensual</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-in"></span> Flujo libre</div>
+    <div class="kpi-value {{ 'txt-net' if flujo_libre >= 0 else 'txt-out' }}">{{ money(flujo_libre) }}</div>
+    <div class="kpi-sub">Neto − pagos de deuda</div>
+  </div></div></div>
 </div>
 
 <div class="card shadow-sm"><div class="card-body">
@@ -43,17 +79,20 @@
     <div class="d-flex justify-content-between small mb-1">
       <span class="fw-semibold">{{ f.label }}</span>
       <span class="text-muted">{{ money(f.monto) }} · <strong>{{ f.real_pct }}%</strong> (meta {{ '%g'|format(f.meta_pct) }}%)
-        {% if f.delta > 0 %}<span class="txt-out">+{{ f.delta }}%</span>{% elif f.delta < 0 %}<span class="txt-in">{{ f.delta }}%</span>{% endif %}
-      </span>
+        {% if f.delta > 0 %}<span class="txt-out">+{{ f.delta }}%</span>{% elif f.delta < 0 %}<span class="txt-in">{{ f.delta }}%</span>{% endif %}</span>
     </div>
-    <div class="progress" style="height:20px; position:relative">
-      {% set color = 'bg-info' if f.key=='invest' else ('bg-primary' if f.key=='need' else 'bg-warning') %}
-      <div class="progress-bar {{ color }}" style="width: {{ [f.real_pct, 100]|min }}%">{{ f.real_pct }}%</div>
-    </div>
+    <div class="progress" style="height:20px">{% set color = 'bg-info' if f.key=='invest' else ('bg-primary' if f.key=='need' else 'bg-warning') %}<div class="progress-bar {{ color }}" style="width: {{ [f.real_pct, 100]|min }}%">{{ f.real_pct }}%</div></div>
   </div>
   {% endfor %}
-  {% if health.sin_clasificar > 0 %}
-    <p class="text-muted small mb-0">⚠️ {{ money(health.sin_clasificar) }} en gastos sin clasificar. Asigna un grupo a esas categorías en <a href="{{ url_for('v2.configuracion') }}">Configuración</a>.</p>
-  {% endif %}
 </div></div>
+
+<script>
+  const _score = {{ score }};
+  const _col = _score >= 75 ? '#22c55e' : (_score >= 50 ? '#f59e0b' : '#ef4444');
+  new Chart(document.getElementById('gauge'), {
+    type: 'doughnut',
+    data: { datasets: [{ data: [_score, 100 - _score], backgroundColor: [_col, 'rgba(120,120,140,.18)'], borderWidth: 0 }] },
+    options: { rotation: -90, circumference: 180, cutout: '72%', plugins: { legend: { display: false }, tooltip: { enabled: false } } }
+  });
+</script>
 {% endblock %}
