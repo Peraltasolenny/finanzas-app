@@ -496,9 +496,22 @@ def goals():
     from models import Account
     metas = Goal.query.filter_by(user_id=uid).order_by(
         Goal.priority, Goal.created_at.desc()).all()
+    # Tiempo restante y aporte mensual estimado para cumplir cada meta.
+    hoy = date.today()
+    info = {}
+    for m in metas:
+        falta = max(0.0, m.target_amount - m.current_amount)
+        meses = None
+        aporte = None
+        if m.target_date and m.target_date > hoy:
+            meses = (m.target_date.year - hoy.year) * 12 + (m.target_date.month - hoy.month)
+            meses = max(1, meses)
+            aporte = round(falta / meses, 2)
+        info[m.id] = {"falta": falta, "meses": meses, "aporte": aporte,
+                      "vencida": bool(m.target_date and m.target_date <= hoy and falta > 0)}
     categorias = Category.query.filter_by(user_id=uid, is_active=True).order_by(Category.name).all()
     accounts = Account.query.filter_by(user_id=uid, is_active=True).order_by(Account.name).all()
-    return render_template("goals.html", metas=metas, categorias=categorias,
+    return render_template("goals.html", metas=metas, info=info, categorias=categorias,
                            accounts=accounts, base=current_user.settings.base_currency)
 
 

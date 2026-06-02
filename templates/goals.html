@@ -68,8 +68,20 @@
         {{ money(g.current_amount, g.currency) }} de {{ money(g.target_amount, g.currency) }}
         {% if g.target_date %} · meta: {{ g.target_date.strftime('%d/%m/%Y') }}{% endif %}
       </div>
-      <div class="progress mb-3" style="height:18px">
+      <div class="progress mb-2" style="height:18px">
         <div class="progress-bar bg-info" style="width: {{ g.progress }}%">{{ g.progress }}%</div>
+      </div>
+      {% if g.description %}<p class="small text-muted mb-2">{{ g.description }}</p>{% endif %}
+      {% set d = info[g.id] %}
+      <div class="row g-2 mb-3">
+        <div class="col-4"><div class="border rounded p-2 text-center">
+          <div class="small text-muted">Falta</div><div class="fw-bold">{{ money(d.falta, g.currency) }}</div></div></div>
+        <div class="col-4"><div class="border rounded p-2 text-center">
+          <div class="small text-muted">Tiempo restante</div>
+          <div class="fw-bold">{% if d.meses %}{{ d.meses }} mes{{ 'es' if d.meses != 1 }}{% elif d.vencida %}<span class="txt-out">vencida</span>{% else %}—{% endif %}</div></div></div>
+        <div class="col-4"><div class="border rounded p-2 text-center">
+          <div class="small text-muted">Aporte mensual</div>
+          <div class="fw-bold txt-save">{% if d.aporte %}{{ money(d.aporte, g.currency) }}{% else %}—{% endif %}</div></div></div>
       </div>
       <form method="post" action="{{ url_for('main.contribute_goal', goal_id=g.id) }}" class="d-flex gap-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

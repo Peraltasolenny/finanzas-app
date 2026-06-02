@@ -30,6 +30,7 @@ ACCOUNT_KINDS = {
     "certificado": "Certificado financiero",
     "corretaje": "Cuenta de corretaje",
     "inversion": "Inversión",
+    "bien": "Bien / activo",
 }
 # Productos que son pasivos (lo que debes): restan al patrimonio.
 LIABILITY_KINDS = {"tarjeta", "prestamo"}

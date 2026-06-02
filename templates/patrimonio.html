@@ -14,10 +14,39 @@
     <div class="kpi-value txt-out">{{ money(nw.pasivos) }}</div>
     <div class="kpi-sub">Tarjetas y préstamos</div>
   </div></div></div>
-  <div class="col-md-4"><div class="card kpi h-100"><div class="card-body">
+  <div class="col-md-3"><div class="card kpi h-100"><div class="card-body">
     <div class="kpi-label"><span class="dot dot-net"></span> Patrimonio neto</div>
     <div class="kpi-value {{ 'txt-net' if nw.patrimonio >= 0 else 'txt-out' }}">{{ money(nw.patrimonio) }}</div>
     <div class="kpi-sub">Activos − Pasivos</div>
+  </div></div></div>
+  <div class="col-md-3"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-out"></span> Ratio de deuda</div>
+    <div class="kpi-value {{ 'txt-out' if ratio_deuda > 50 else '' }}">{{ ratio_deuda }}%</div>
+    <div class="kpi-sub">Pasivos / activos · ideal &lt;50%</div>
+  </div></div></div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-6"><div class="card shadow-sm h-100"><div class="card-body">
+    <h5 class="card-title mb-3">Composición del patrimonio</h5>
+    {% if comp_chart.labels %}<canvas id="chartComp" height="200"></canvas>
+    {% else %}<p class="text-muted mb-0">Registra cuentas, inversiones o bienes para ver la composición.</p>{% endif %}
+  </div></div></div>
+  <div class="col-lg-6"><div class="card shadow-sm h-100"><div class="card-body">
+    <h5 class="card-title mb-3">Registrar bien / activo</h5>
+    <p class="text-muted small">Agrega bienes que no están en un banco (vehículo, propiedad, etc.) para incluirlos en tu patrimonio.</p>
+    <form method="post" class="row g-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-7"><label class="form-label small">Nombre</label>
+        <input type="text" name="name" class="form-control form-control-sm" placeholder="Ej. Vehículo" required></div>
+      <div class="col-5"><label class="form-label small">Categoría/entidad</label>
+        <input type="text" name="bank" class="form-control form-control-sm" placeholder="Opcional"></div>
+      <div class="col-7"><label class="form-label small">Valor estimado</label>
+        <input type="number" step="0.01" name="balance" class="form-control form-control-sm"></div>
+      <div class="col-5"><label class="form-label small">Moneda</label>
+        <select name="currency" class="form-select form-select-sm">{% for m in monedas %}<option {{ 'selected' if m == base }}>{{ m }}</option>{% endfor %}</select></div>
+      <div class="col-12"><button class="btn btn-sm btn-dark">Registrar bien</button></div>
+    </form>
   </div></div></div>
 </div>
 
@@ -42,4 +71,15 @@
   </table>
   </div>
 </div></div>
+
+{% if comp_chart.labels %}
+<script>
+  new Chart(document.getElementById('chartComp'), {
+    type: 'doughnut',
+    data: { labels: {{ comp_chart.labels|tojson }}, datasets: [{ data: {{ comp_chart.valores|tojson }},
+      backgroundColor: ['#7c5cff','#22c55e','#06b6d4','#f59e0b','#ec4899','#8b5cf6','#14b8a6','#64748b'] }] },
+    options: { plugins: { legend: { position: 'right', labels: { color:'#9aa', boxWidth:12 } } } }
+  });
+</script>
+{% endif %}
 {% endblock %}

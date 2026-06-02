@@ -3,6 +3,45 @@
 {% block content %}
 <h4 class="mb-4 page-title">Proyecciones</h4>
 
+{# Tarjetas de proyección a 12 meses #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-net"></span> Patrimonio hoy</div>
+    <div class="kpi-value {{ 'txt-net' if nw.patrimonio >= 0 else 'txt-out' }}">{{ money(nw.patrimonio) }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-net"></span> Patrimonio en 12m</div>
+    <div class="kpi-value {{ 'txt-net' if patrimonio_12 >= 0 else 'txt-out' }}">{{ money(patrimonio_12) }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-save"></span> Ahorro en 12m</div>
+    <div class="kpi-value txt-save">{{ money(ahorro_12) }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi h-100"><div class="card-body">
+    <div class="kpi-label"><span class="dot dot-out"></span> Deuda en 12m</div>
+    <div class="kpi-value txt-out">{{ money(deuda_12) }}</div>
+    <div class="kpi-sub">Hoy: {{ money(deuda_hoy) }}</div></div></div></div>
+</div>
+
+{# Simulador de cambios / ingreso extra #}
+<div class="card shadow-sm mb-4"><div class="card-body">
+  <h5 class="card-title mb-2">Simulador de impacto</h5>
+  <p class="text-muted small">¿Qué pasa si ahorras (o ganas) un monto extra cada mes?</p>
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-auto"><label class="form-label small mb-0">Ahorro/ingreso extra mensual</label>
+      <input type="number" step="0.01" name="extra" value="{{ '%.2f'|format(extra) if extra else '' }}" class="form-control form-control-sm" placeholder="Ej. 5000"></div>
+    <div class="col-auto"><button class="btn btn-sm btn-dark">Simular</button></div>
+  </form>
+  {% if extra %}
+  <div class="row g-3 mt-1">
+    <div class="col-md-6"><div class="border rounded p-2">
+      <div class="small text-muted">Ahorro en 12m</div>
+      <div class="fw-bold">{{ money(ahorro_12) }} → <span class="txt-net">{{ money(ahorro_12_extra) }}</span></div></div></div>
+    <div class="col-md-6"><div class="border rounded p-2">
+      <div class="small text-muted">Patrimonio en 12m</div>
+      <div class="fw-bold">{{ money(patrimonio_12) }} → <span class="txt-net">{{ money(patrimonio_12_extra) }}</span></div></div></div>
+  </div>
+  <p class="small text-muted mt-2 mb-0">Con {{ money(extra) }}/mes extra acumularías <strong class="txt-net">{{ money(ahorro_12_extra - ahorro_12) }}</strong> más en un año.</p>
+  {% endif %}
+</div></div>
+
 <div class="row g-3 mb-4">
   <div class="col-md-4"><div class="card kpi h-100"><div class="card-body">
     <div class="kpi-label"><span class="dot dot-in"></span> Ingreso promedio</div>

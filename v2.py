@@ -742,17 +742,53 @@ def eliminar_recurrente(rule_id):
 
 
 # ----------------- PATRIMONIO -----------------
-@v2_bp.route("/patrimonio")
+@v2_bp.route("/patrimonio", methods=["GET", "POST"])
 @login_required
 def patrimonio():
+    uid = current_user.id
+    if request.method == "POST":
+        # Registrar un bien / activo (ej. vehículo, propiedad).
+        nombre = request.form.get("name", "").strip()
+        if nombre:
+            db.session.add(Account(
+                user_id=uid, name=nombre, kind="bien",
+                bank=request.form.get("bank", "").strip(),
+                currency=request.form.get("currency", "").strip() or current_user.settings.base_currency,
+                balance=_f(request.form.get("balance"))))
+            db.session.commit()
+            flash("Bien/activo registrado.", "success")
+        return redirect(url_for("v2.patrimonio"))
+
     rates = finance.get_rates(current_user)
     nw = finance.net_worth(current_user, rates)
-    cuentas = Account.query.filter_by(user_id=current_user.id, is_active=True).order_by(
+    cuentas = Account.query.filter_by(user_id=uid, is_active=True).order_by(
         Account.kind, Account.name).all()
     detalle = [{"a": a, "base_val": finance.to_base(a.balance, a.currency, current_user, rates)}
                for a in cuentas]
+
+    # Ratio de deuda y composición del patrimonio (activos por tipo).
+    ratio_deuda = round(nw["pasivos"] / nw["activos"] * 100, 1) if nw["activos"] > 0 else 0.0
+    composicion = {}
+    for d in detalle:
+        if d["a"].kind not in LIABILITY_KINDS:
+            label = ACCOUNT_KINDS.get(d["a"].kind, d["a"].kind)
+            composicion[label] = composicion.get(label, 0.0) + d["base_val"]
+    comp_items = sorted(composicion.items(), key=lambda x: -x[1])
+    comp_chart = {"labels": [c[0] for c in comp_items], "valores": [round(c[1], 2) for c in comp_items]}
+
     return render_template("patrimonio.html", nw=nw, detalle=detalle,
-                           kind_labels=ACCOUNT_KINDS, base=current_user.settings.base_currency)
+                           kind_labels=ACCOUNT_KINDS, base=current_user.settings.base_currency,
+                           ratio_deuda=ratio_deuda, comp_chart=comp_chart,
+                           monedas=reports_monedas_v2(current_user))
+
+
+def reports_monedas_v2(user):
+    from models import ExchangeRate
+    ms = [user.settings.base_currency]
+    for r in ExchangeRate.query.filter_by(user_id=user.id).order_by(ExchangeRate.code).all():
+        if r.code not in ms:
+            ms.append(r.code)
+    return ms
 
 
 # ----------------- FAMILIA -----------------
@@ -962,8 +998,27 @@ def proyecciones():
     prom_gas = sum(m["gastos"] for m in con_datos) / len(con_datos) if con_datos else 0.0
     prom_neto = prom_ing - prom_gas
     nw = finance.net_worth(current_user, rates)
-    # Proyección de patrimonio a 6 y 12 meses con el ahorro promedio.
     proy = [{"meses": n, "patrimonio": round(nw["patrimonio"] + prom_neto * n, 2)} for n in (3, 6, 12, 24)]
+
+    # Simulador: ingreso/ahorro extra mensual y su impacto a 12 meses.
+    extra = _f(request.args.get("extra"))
+    ahorro_12 = round(prom_neto * 12, 2)
+    patrimonio_12 = round(nw["patrimonio"] + prom_neto * 12, 2)
+    # Deuda proyectada a 12 meses (reduciendo por pagos mínimos, sin intereses; estimación).
+    from models import LIABILITY_KINDS, Debt
+    pago_min = sum(finance.to_base(a.minimum_payment, a.currency, current_user, rates)
+                   for a in Account.query.filter_by(user_id=uid, is_active=True)
+                   .filter(Account.kind.in_(LIABILITY_KINDS)).all()) \
+        + sum(d.minimum_payment for d in Debt.query.filter_by(user_id=uid).all())
+    deuda_hoy = nw["pasivos"]
+    deuda_12 = round(max(0.0, deuda_hoy - pago_min * 12), 2)
+    # Con el extra:
+    ahorro_12_extra = round((prom_neto + extra) * 12, 2)
+    patrimonio_12_extra = round(nw["patrimonio"] + (prom_neto + extra) * 12, 2)
+
     return render_template("proyecciones.html", meses_data=meses_data, prom_ing=prom_ing,
                            prom_gas=prom_gas, prom_neto=prom_neto, nw=nw, proy=proy,
+                           ahorro_12=ahorro_12, patrimonio_12=patrimonio_12,
+                           deuda_hoy=deuda_hoy, deuda_12=deuda_12, extra=extra,
+                           ahorro_12_extra=ahorro_12_extra, patrimonio_12_extra=patrimonio_12_extra,
                            base=current_user.settings.base_currency)
