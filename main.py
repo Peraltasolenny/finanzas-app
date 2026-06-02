@@ -9,6 +9,7 @@ from extensions import db
 from models import Category, Transaction, Budget, Goal, Debt
 from importer import parse_statement
 import finance
+import reports
 
 main_bp = Blueprint("main", __name__)
 
@@ -57,88 +58,99 @@ MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
 @main_bp.route("/")
 @login_required
 def dashboard():
-    year, month = _parse_period()
     uid = current_user.id
-
-    # Materializa transacciones recurrentes vencidas al abrir el resumen.
+    today = date.today()
     finance.generate_due_transactions(current_user)
 
-    def period_filter(q):
-        return q.filter(
-            Transaction.user_id == uid,
-            extract("year", Transaction.tx_date) == year,
-            extract("month", Transaction.tx_date) == month,
-        )
+    # Filtros: granularidad, rango personalizado, moneda, comparación.
+    g = request.args.get("g", "month")
+    desde = _parse_iso_date(request.args.get("desde"))
+    hasta = _parse_iso_date(request.args.get("hasta"))
+    cur = request.args.get("cur") or None
+    comparar = request.args.get("cmp") == "1"
 
-    ingresos = period_filter(
-        db.session.query(func.coalesce(func.sum(Transaction.amount), 0.0))
-    ).filter(Transaction.type == "income").scalar() or 0.0
+    start, end, periodo_label = reports.period_range(g, desde, hasta, today)
+    rates = finance.get_rates(current_user)
+    base = current_user.settings.base_currency
 
-    gastos = period_filter(
-        db.session.query(func.coalesce(func.sum(Transaction.amount), 0.0))
-    ).filter(Transaction.type == "expense").scalar() or 0.0
-
-    neto = ingresos - gastos
+    from models import Account, LIABILITY_KINDS
+    txs = reports.filter_txs(
+        Transaction.query.filter(Transaction.user_id == uid), start, end, currency=cur)
+    ingresos, gastos, neto = reports.totals(current_user, txs, rates)
     tasa_ahorro = (neto / ingresos * 100) if ingresos > 0 else 0.0
 
-    # Presupuestado vs real por categoría de gasto
-    gasto_por_cat = dict(
-        period_filter(
-            db.session.query(Transaction.category_id, func.sum(Transaction.amount))
-        ).filter(Transaction.type == "expense")
-        .group_by(Transaction.category_id).all()
-    )
+    comp = None
+    if comparar:
+        pstart, pend = reports.prev_range(start, end)
+        ptxs = reports.filter_txs(
+            Transaction.query.filter(Transaction.user_id == uid), pstart, pend, currency=cur)
+        ping, pgas, pneto = reports.totals(current_user, ptxs, rates)
+        comp = {"ingresos": ping, "gastos": pgas, "neto": pneto,
+                "label": f"{pstart.strftime('%d/%m')} – {pend.strftime('%d/%m')}"}
 
-    presupuestos = {
-        b.category_id: b.amount
-        for b in Budget.query.filter_by(user_id=uid, year=year, month=month).all()
-    }
+    # Monto en inversiones (certificados, corretaje, inversión).
+    inv_kinds = ["inversion", "certificado", "corretaje"]
+    inversiones_total = sum(
+        finance.to_base(a.balance, a.currency, current_user, rates)
+        for a in Account.query.filter_by(user_id=uid, is_active=True)
+        .filter(Account.kind.in_(inv_kinds)).all())
 
-    categorias_gasto = Category.query.filter_by(
-        user_id=uid, type="expense", is_active=True
-    ).order_by(Category.name).all()
+    # Avance total de metas (%).
+    metas = Goal.query.filter_by(user_id=uid).order_by(Goal.priority, Goal.created_at.desc()).all()
+    tgt = sum(m.target_amount for m in metas)
+    cur_tot = sum(m.current_amount for m in metas)
+    avance_metas = round(cur_tot / tgt * 100, 1) if tgt > 0 else 0.0
 
-    filas_presupuesto = []
-    total_presupuestado = 0.0
-    for c in categorias_gasto:
-        presup = presupuestos.get(c.id, 0.0)
-        real = gasto_por_cat.get(c.id, 0.0)
-        total_presupuestado += presup
-        if presup == 0 and real == 0:
-            continue
-        pct = (real / presup * 100) if presup > 0 else None
-        filas_presupuesto.append({
-            "nombre": c.name, "presupuestado": presup, "real": real,
-            "diferencia": presup - real, "pct": pct,
-        })
-
-    metas = Goal.query.filter_by(user_id=uid).order_by(Goal.created_at.desc()).all()
-
-    # Deudas = pasivos (tarjetas/préstamos) de Productos + deudas heredadas.
-    from models import Account, LIABILITY_KINDS
+    # Deudas (pasivos + heredadas).
     pasivos = Account.query.filter_by(user_id=uid, is_active=True).filter(
         Account.kind.in_(LIABILITY_KINDS)).all()
-    deudas = Debt.query.filter_by(user_id=uid).order_by(Debt.balance.desc()).all()
+    deudas = Debt.query.filter_by(user_id=uid).all()
     total_deuda = sum(d.balance for d in deudas) + sum(a.balance for a in pasivos)
     total_pago_min = sum(d.minimum_payment for d in deudas) + sum(a.minimum_payment for a in pasivos)
 
-    # Distribución de gastos del periodo por grupo (necesidades/gustos/inversión).
-    rates = finance.get_rates(current_user)
-    period_txs = period_filter(
-        db.session.query(Transaction)).filter(Transaction.type == "expense").all()
-    distribucion = finance.health_breakdown(current_user, period_txs, rates)
+    # Gráficos.
+    distribucion_pie = reports.expense_distribution(current_user, txs, rates)
+    tendencia = reports.trend_series(current_user, txs, start, end, rates)
+    salud = finance.health_breakdown(current_user, [t for t in txs if t.type == "expense"], rates)
+
+    # Presupuesto vs real (referido al mes de fin del rango).
+    presupuestos = {b.category_id: b.amount for b in Budget.query.filter_by(
+        user_id=uid, year=end.year, month=end.month).all()}
+    gasto_por_cat = {}
+    for t in txs:
+        if t.type == "expense":
+            gasto_por_cat[t.category_id] = gasto_por_cat.get(t.category_id, 0.0) + \
+                finance.to_base(t.amount, t.currency, current_user, rates)
+    filas_presupuesto = []
+    for c in Category.query.filter_by(user_id=uid, type="expense", is_active=True).order_by(Category.name).all():
+        presup = presupuestos.get(c.id, 0.0)
+        real = gasto_por_cat.get(c.id, 0.0)
+        if presup == 0 and real == 0:
+            continue
+        filas_presupuesto.append({"nombre": c.name, "presupuestado": presup, "real": real,
+                                  "pct": (real / presup * 100) if presup > 0 else None})
 
     return render_template(
-        "dashboard.html",
-        year=year, month=month, mes_nombre=MESES[month], meses=MESES,
+        "dashboard.html", g=g, periodo_label=periodo_label,
+        desde=start.isoformat(), hasta=end.isoformat(), cur=cur, comparar=comparar, comp=comp,
+        base=base, monedas=reports_monedas(current_user),
         ingresos=ingresos, gastos=gastos, neto=neto, tasa_ahorro=tasa_ahorro,
-        total_presupuestado=total_presupuestado,
-        filas_presupuesto=filas_presupuesto,
+        inversiones_total=inversiones_total, avance_metas=avance_metas,
         metas=metas, deudas=deudas, pasivos=pasivos,
         total_deuda=total_deuda, total_pago_min=total_pago_min,
-        distribucion=distribucion,
-        years=list(range(date.today().year - 3, date.today().year + 2)),
+        distribucion_pie=distribucion_pie, tendencia=tendencia, salud=salud,
+        filas_presupuesto=filas_presupuesto,
     )
+
+
+def reports_monedas(user):
+    """Lista de monedas del usuario (base + tasas) para el filtro."""
+    from models import ExchangeRate
+    ms = [user.settings.base_currency]
+    for r in ExchangeRate.query.filter_by(user_id=user.id).order_by(ExchangeRate.code).all():
+        if r.code not in ms:
+            ms.append(r.code)
+    return ms
 
 
 # ----------------- transacciones -----------------
