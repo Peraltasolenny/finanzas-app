@@ -318,6 +318,31 @@ class Budget(db.Model):
     )
 
 
+class BudgetTemplate(db.Model):
+    """Plantilla de presupuesto reutilizable (mensual, evento, vacaciones, etc.)."""
+    __tablename__ = "budget_templates"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    kind = db.Column(db.String(20), nullable=False, default="mensual")  # mensual/evento/salida/vacaciones/extraordinario
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    items = db.relationship("BudgetTemplateItem", backref="template",
+                            cascade="all, delete-orphan")
+
+    @property
+    def total(self):
+        return sum(i.amount for i in self.items)
+
+
+class BudgetTemplateItem(db.Model):
+    __tablename__ = "budget_template_items"
+    id = db.Column(db.Integer, primary_key=True)
+    template_id = db.Column(db.Integer, db.ForeignKey("budget_templates.id"), nullable=False)
+    category_name = db.Column(db.String(80), nullable=False)
+    bucket = db.Column(db.String(10), nullable=True)
+    amount = db.Column(db.Float, nullable=False, default=0.0)
+
+
 class Goal(db.Model):
     __tablename__ = "goals"
     id = db.Column(db.Integer, primary_key=True)
@@ -470,6 +495,32 @@ DEFAULT_CATEGORIES = [
 def seed_default_categories(user):
     for nombre, tipo, bucket in DEFAULT_CATEGORIES:
         db.session.add(Category(user_id=user.id, name=nombre, type=tipo, bucket=bucket))
+    db.session.commit()
+
+
+DEFAULT_TEMPLATES = {
+    "Presupuesto mensual": ("mensual", [
+        ("Vivienda", "need", 0), ("Servicios (luz, agua, internet)", "need", 0),
+        ("Supermercado", "need", 0), ("Transporte", "need", 0),
+        ("Comida fuera", "want", 0), ("Ocio y entretenimiento", "want", 0),
+        ("Ahorro e inversión", "invest", 0)]),
+    "Evento / salida": ("evento", [
+        ("Comida fuera", "want", 0), ("Transporte", "need", 0),
+        ("Ocio y entretenimiento", "want", 0), ("Regalos y eventos", "want", 0)]),
+    "Vacaciones": ("vacaciones", [
+        ("Transporte", "need", 0), ("Hospedaje", "want", 0), ("Comida fuera", "want", 0),
+        ("Ocio y entretenimiento", "want", 0), ("Cuidado personal", "want", 0)]),
+}
+
+
+def seed_budget_templates(user):
+    for nombre, (kind, items) in DEFAULT_TEMPLATES.items():
+        t = BudgetTemplate(user_id=user.id, name=nombre, kind=kind)
+        db.session.add(t)
+        db.session.flush()
+        for cat, bucket, amount in items:
+            db.session.add(BudgetTemplateItem(template_id=t.id, category_name=cat,
+                                              bucket=bucket, amount=amount))
     db.session.commit()
 
 

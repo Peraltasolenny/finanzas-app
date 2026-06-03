@@ -25,10 +25,106 @@
           </td>
         </tr>
       {% endfor %}
+      {# Placeholders: agrega categorías nuevas directo aquí #}
+      {% for i in range(1, 4) %}
+        <tr class="table-active">
+          <td>
+            <div class="input-group input-group-sm">
+              <input type="text" name="new_name_{{ i }}" class="form-control" placeholder="+ Nueva categoría">
+              <select name="new_bucket_{{ i }}" class="form-select" style="max-width:130px">
+                <option value="">(grupo)</option>
+                {% for k, label in buckets.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+          </td>
+          <td>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text">{{ currency }}</span>
+              <input type="number" step="0.01" min="0" name="new_amount_{{ i }}" class="form-control" placeholder="0.00">
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
       </tbody>
       <tfoot><tr class="fw-bold"><td>Total presupuestado</td><td>{{ money(total) }}</td></tr></tfoot>
     </table>
-    <button class="btn btn-dark">Guardar presupuesto</button>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-dark">Guardar presupuesto</button>
+      <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#guardarTpl">Guardar como plantilla</button>
+    </div>
+  </form>
+
+  {# Guardar el presupuesto actual como plantilla #}
+  <div class="collapse mt-3" id="guardarTpl">
+    <form method="post" action="{{ url_for('main.budget_save_template') }}?year={{ year }}&month={{ month }}" class="row g-2 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-5"><label class="form-label small mb-0">Nombre de la plantilla</label>
+        <input type="text" name="name" class="form-control form-control-sm" placeholder="Ej. Mi presupuesto base" required></div>
+      <div class="col-md-4"><label class="form-label small mb-0">Tipo</label>
+        <select name="kind" class="form-select form-select-sm">
+          <option value="mensual">Mensual</option><option value="evento">Evento</option>
+          <option value="salida">Salida</option><option value="vacaciones">Vacaciones</option>
+          <option value="extraordinario">Extraordinario</option>
+        </select></div>
+      <div class="col-md-3"><button class="btn btn-sm btn-dark w-100">Guardar plantilla</button></div>
+    </form>
+  </div>
+</div></div>
+
+{# Plantillas #}
+<div class="card shadow-sm mt-3"><div class="card-body">
+  <h5 class="card-title mb-3">Plantillas de presupuesto</h5>
+  <div class="row g-2">
+  {% for t in plantillas %}
+    <div class="col-md-6 col-lg-4">
+      <div class="border rounded p-2 h-100">
+        <div class="d-flex justify-content-between">
+          <div><strong>{{ t.name }}</strong> <span class="badge text-bg-secondary">{{ t.kind }}</span></div>
+          <form method="post" action="{{ url_for('main.budget_delete_template', tpl_id=t.id) }}" onsubmit="return confirm('¿Eliminar plantilla?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-link text-danger p-0">×</button></form>
+        </div>
+        <div class="small text-muted mb-2">{{ t.items|length }} categorías · {{ money(t.total) }}</div>
+        {# Aplicar a un mes #}
+        <form method="post" action="{{ url_for('main.budget_apply_template', tpl_id=t.id) }}" class="d-flex gap-1 mb-1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <select name="month" class="form-select form-select-sm">{% for m in range(1,13) %}<option value="{{ m }}" {{ 'selected' if m==month }}>{{ meses[m][:3] }}</option>{% endfor %}</select>
+          <select name="year" class="form-select form-select-sm">{% for y in years %}<option value="{{ y }}" {{ 'selected' if y==year }}>{{ y }}</option>{% endfor %}</select>
+          <button class="btn btn-sm btn-outline-dark">Aplicar</button>
+        </form>
+        {# Distribuir en N meses #}
+        <form method="post" action="{{ url_for('main.budget_distribute') }}" class="d-flex gap-1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="tpl_id" value="{{ t.id }}">
+          <input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="month" value="{{ month }}">
+          <input type="number" min="1" max="24" name="n_meses" value="3" class="form-control form-control-sm" style="max-width:70px" title="Meses">
+          <button class="btn btn-sm btn-outline-secondary" title="Distribuye los montos divididos entre N meses desde {{ meses[month] }}">Distribuir</button>
+        </form>
+      </div>
+    </div>
+  {% else %}
+    <p class="text-muted small">Sin plantillas. Guarda tu presupuesto actual como plantilla arriba.</p>
+  {% endfor %}
+  </div>
+</div></div>
+
+{# Copiar / duplicar presupuesto #}
+<div class="card shadow-sm mt-3"><div class="card-body">
+  <h5 class="card-title mb-3">Copiar / duplicar presupuesto</h5>
+  <form method="post" action="{{ url_for('main.budget_copy') }}" class="row g-2 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-auto"><label class="form-label small mb-0">Desde</label>
+      <div class="d-flex gap-1">
+        <select name="src_month" class="form-select form-select-sm">{% for m in range(1,13) %}<option value="{{ m }}" {{ 'selected' if m==month }}>{{ meses[m][:3] }}</option>{% endfor %}</select>
+        <select name="src_year" class="form-select form-select-sm">{% for y in years %}<option value="{{ y }}" {{ 'selected' if y==year }}>{{ y }}</option>{% endfor %}</select>
+      </div></div>
+    <div class="col-auto pt-3">→</div>
+    <div class="col-auto"><label class="form-label small mb-0">Hacia</label>
+      <div class="d-flex gap-1">
+        <select name="dst_month" class="form-select form-select-sm">{% for m in range(1,13) %}<option value="{{ m }}" {{ 'selected' if m==(month % 12 + 1) }}>{{ meses[m][:3] }}</option>{% endfor %}</select>
+        <select name="dst_year" class="form-select form-select-sm">{% for y in years %}<option value="{{ y }}" {{ 'selected' if y==year }}>{{ y }}</option>{% endfor %}</select>
+      </div></div>
+    <div class="col-auto"><button class="btn btn-sm btn-dark">Copiar</button></div>
   </form>
 </div></div>
 

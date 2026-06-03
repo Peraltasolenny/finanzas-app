@@ -476,9 +476,35 @@ def budget():
                     b = Budget(user_id=uid, category_id=c.id, year=year, month=month)
                     db.session.add(b)
                 b.amount = monto
+        # Placeholders: categorías nuevas creadas directamente desde el presupuesto.
+        nuevas = 0
+        for i in range(1, 6):
+            nombre = request.form.get(f"new_name_{i}", "").strip()
+            if not nombre:
+                continue
+            cat = Category.query.filter_by(user_id=uid, name=nombre, type="expense").first()
+            if cat is None:
+                cat = Category(user_id=uid, name=nombre, type="expense",
+                               bucket=request.form.get(f"new_bucket_{i}") or None)
+                db.session.add(cat)
+                db.session.flush()
+                nuevas += 1
+            monto = _to_float(request.form.get(f"new_amount_{i}"))
+            b = Budget.query.filter_by(user_id=uid, category_id=cat.id, year=year, month=month).first()
+            if b is None:
+                b = Budget(user_id=uid, category_id=cat.id, year=year, month=month)
+                db.session.add(b)
+            b.amount = monto
         db.session.commit()
-        flash("Presupuesto guardado.", "success")
+        flash(f"Presupuesto guardado.{f' {nuevas} categoría(s) nueva(s).' if nuevas else ''}", "success")
         return redirect(url_for("main.budget", year=year, month=month))
+
+    # Sembrar plantillas pre-hechas la primera vez.
+    from models import BudgetTemplate
+    if BudgetTemplate.query.filter_by(user_id=uid).first() is None:
+        from models import seed_budget_templates
+        seed_budget_templates(current_user)
+    plantillas = BudgetTemplate.query.filter_by(user_id=uid).order_by(BudgetTemplate.name).all()
 
     categorias = Category.query.filter_by(
         user_id=uid, type="expense", is_active=True).order_by(Category.name).all()
@@ -505,12 +531,133 @@ def budget():
         historico.append({"label": f"{MESES[m][:3]} {y}", "presupuestado": presup,
                           "gastado": gastado, "pct": pct})
 
+    years = list(range(date.today().year - 1, date.today().year + 3))
+    # Opciones de meses para copiar/distribuir.
+    meses_opts = [(y, m) for y in years for m in range(1, 13)]
     return render_template(
         "budget.html", categorias=categorias, presupuestos=presupuestos,
         total=total, year=year, month=month, mes_nombre=MESES[month], meses=MESES,
-        years=list(range(date.today().year - 3, date.today().year + 2)),
-        historico=historico,
+        years=years, historico=historico, plantillas=plantillas, meses_opts=meses_opts,
+        buckets={"need": "Necesidad", "want": "Gusto", "invest": "Inversión"},
     )
+
+
+# ----------------- plantillas / copiar / distribuir presupuesto -----------------
+@main_bp.route("/presupuesto/plantilla/guardar", methods=["POST"])
+@login_required
+def budget_save_template():
+    from models import BudgetTemplate, BudgetTemplateItem
+    uid = current_user.id
+    year, month = _parse_period()
+    nombre = request.form.get("name", "").strip()
+    kind = request.form.get("kind", "mensual")
+    if not nombre:
+        flash("Ponle un nombre a la plantilla.", "danger")
+        return redirect(url_for("main.budget", year=year, month=month))
+    t = BudgetTemplate(user_id=uid, name=nombre, kind=kind)
+    db.session.add(t)
+    db.session.flush()
+    for b in Budget.query.filter_by(user_id=uid, year=year, month=month).all():
+        if b.amount > 0 and b.category:
+            db.session.add(BudgetTemplateItem(template_id=t.id, category_name=b.category.name,
+                                              bucket=b.category.bucket, amount=b.amount))
+    db.session.commit()
+    flash(f"Plantilla '{nombre}' guardada desde el presupuesto de {MESES[month]}.", "success")
+    return redirect(url_for("main.budget", year=year, month=month))
+
+
+@main_bp.route("/presupuesto/plantilla/<int:tpl_id>/aplicar", methods=["POST"])
+@login_required
+def budget_apply_template(tpl_id):
+    from models import BudgetTemplate
+    uid = current_user.id
+    t = db.session.get(BudgetTemplate, tpl_id)
+    year = _int_or(request.form.get("year"), date.today().year)
+    month = _int_or(request.form.get("month"), date.today().month)
+    if not t or t.user_id != uid:
+        flash("Plantilla no encontrada.", "danger")
+        return redirect(url_for("main.budget"))
+    for it in t.items:
+        cat = Category.query.filter_by(user_id=uid, name=it.category_name, type="expense").first()
+        if cat is None:
+            cat = Category(user_id=uid, name=it.category_name, type="expense", bucket=it.bucket)
+            db.session.add(cat)
+            db.session.flush()
+        b = Budget.query.filter_by(user_id=uid, category_id=cat.id, year=year, month=month).first()
+        if b is None:
+            b = Budget(user_id=uid, category_id=cat.id, year=year, month=month)
+            db.session.add(b)
+        b.amount = it.amount
+    db.session.commit()
+    flash(f"Plantilla '{t.name}' aplicada a {MESES[month]} {year}.", "success")
+    return redirect(url_for("main.budget", year=year, month=month))
+
+
+@main_bp.route("/presupuesto/plantilla/<int:tpl_id>/eliminar", methods=["POST"])
+@login_required
+def budget_delete_template(tpl_id):
+    from models import BudgetTemplate
+    t = db.session.get(BudgetTemplate, tpl_id)
+    if t and t.user_id == current_user.id:
+        db.session.delete(t)
+        db.session.commit()
+        flash("Plantilla eliminada.", "info")
+    return redirect(url_for("main.budget"))
+
+
+@main_bp.route("/presupuesto/copiar", methods=["POST"])
+@login_required
+def budget_copy():
+    uid = current_user.id
+    sy, sm = _int_or(request.form.get("src_year")), _int_or(request.form.get("src_month"))
+    ty, tm = _int_or(request.form.get("dst_year")), _int_or(request.form.get("dst_month"))
+    if not all([sy, sm, ty, tm]):
+        flash("Selecciona mes origen y destino.", "danger")
+        return redirect(url_for("main.budget"))
+    n = 0
+    for b in Budget.query.filter_by(user_id=uid, year=sy, month=sm).all():
+        dst = Budget.query.filter_by(user_id=uid, category_id=b.category_id, year=ty, month=tm).first()
+        if dst is None:
+            dst = Budget(user_id=uid, category_id=b.category_id, year=ty, month=tm)
+            db.session.add(dst)
+        dst.amount = b.amount
+        n += 1
+    db.session.commit()
+    flash(f"Se copiaron {n} líneas de {MESES[sm]} {sy} a {MESES[tm]} {ty}.", "success")
+    return redirect(url_for("main.budget", year=ty, month=tm))
+
+
+@main_bp.route("/presupuesto/distribuir", methods=["POST"])
+@login_required
+def budget_distribute():
+    """Aplica una plantilla extraordinaria distribuida en N meses (divide los montos)."""
+    from models import BudgetTemplate
+    uid = current_user.id
+    t = db.session.get(BudgetTemplate, _int_or(request.form.get("tpl_id")))
+    sy = _int_or(request.form.get("year"), date.today().year)
+    sm = _int_or(request.form.get("month"), date.today().month)
+    n_meses = max(1, _int_or(request.form.get("n_meses"), 1))
+    if not t or t.user_id != uid:
+        flash("Plantilla no encontrada.", "danger")
+        return redirect(url_for("main.budget"))
+    for k in range(n_meses):
+        y = sy + (sm - 1 + k) // 12
+        m = (sm - 1 + k) % 12 + 1
+        for it in t.items:
+            cat = Category.query.filter_by(user_id=uid, name=it.category_name, type="expense").first()
+            if cat is None:
+                cat = Category(user_id=uid, name=it.category_name, type="expense", bucket=it.bucket)
+                db.session.add(cat)
+                db.session.flush()
+            b = Budget.query.filter_by(user_id=uid, category_id=cat.id, year=y, month=m).first()
+            if b is None:
+                b = Budget(user_id=uid, category_id=cat.id, year=y, month=m)
+                db.session.add(b)
+            b.amount = (b.amount or 0) + round(it.amount / n_meses, 2)
+    db.session.commit()
+    flash(f"'{t.name}' distribuida en {n_meses} mes(es) desde {MESES[sm]} {sy} "
+          f"(montos divididos entre {n_meses}).", "success")
+    return redirect(url_for("main.budget", year=sy, month=sm))
 
 
 # ----------------- metas de ahorro -----------------
