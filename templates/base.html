@@ -40,11 +40,12 @@
         </li>
         {# Movimientos #}
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['main.transactions','v2.por_banco','main.import_statement','main.categories','v2.recurrentes'] }}" href="#" role="button" data-bs-toggle="dropdown">Movimientos</a>
+          <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['main.transactions','v2.por_banco','main.import_statement','main.categories','v2.recurrentes','v2.calendario'] }}" href="#" role="button" data-bs-toggle="dropdown">Movimientos</a>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="{{ url_for('main.transactions') }}">Transacciones</a></li>
             <li><a class="dropdown-item" href="{{ url_for('v2.por_banco') }}">Por banco</a></li>
             <li><a class="dropdown-item" href="{{ url_for('v2.recurrentes') }}">Recurrentes</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.calendario') }}">Calendario</a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="{{ url_for('main.import_statement') }}">Importar estado de cuenta</a></li>
             <li><a class="dropdown-item" href="{{ url_for('main.categories') }}">Categorías</a></li>

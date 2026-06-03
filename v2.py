@@ -1,5 +1,6 @@
 """Rutas v2: configuración, productos, salud financiera, patrimonio,
 proyecciones, recurrentes y nómina/ISR."""
+import calendar as _cal
 from datetime import date, datetime
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request
@@ -683,6 +684,61 @@ def recurrentes():
     freqs = {"weekly": "Semanal", "biweekly": "Quincenal", "monthly": "Mensual", "yearly": "Anual"}
     return render_template("recurrentes.html", reglas=reglas, categorias=categorias,
                            accounts=accounts, freqs=freqs, hoy=date.today().isoformat())
+
+
+@v2_bp.route("/calendario")
+@login_required
+def calendario():
+    """Calendario mensual con días de ingresos y pagos recurrentes."""
+    uid = current_user.id
+    hoy = date.today()
+    try:
+        year = int(request.args.get("year", hoy.year))
+        month = int(request.args.get("month", hoy.month))
+    except (TypeError, ValueError):
+        year, month = hoy.year, hoy.month
+    if not 1 <= month <= 12:
+        month = hoy.month
+
+    first = date(year, month, 1)
+    last_day = _cal.monthrange(year, month)[1]
+    last = date(year, month, last_day)
+    eventos = {}      # día -> lista de {kind, label, amount, currency}
+    tot_ing = tot_gas = 0.0
+
+    # Ocurrencias de reglas recurrentes dentro del mes.
+    for r in RecurringRule.query.filter_by(user_id=uid, is_active=True).all():
+        d = r.start_date or first
+        guard = 0
+        while d and d <= last and guard < 2000:
+            if d >= first and (r.end_date is None or d <= r.end_date):
+                eventos.setdefault(d.day, []).append({
+                    "kind": r.type,
+                    "label": r.description or (r.category.name if r.category else "Recurrente"),
+                    "amount": r.amount, "currency": r.currency})
+                if r.type == "income":
+                    tot_ing += r.amount
+                else:
+                    tot_gas += r.amount
+            d = finance._advance(d, r.frequency, r.day_of_month)
+            guard += 1
+
+    # Días de pago de tarjetas y préstamos.
+    for a in Account.query.filter_by(user_id=uid, is_active=True).filter(
+            Account.kind.in_(LIABILITY_KINDS)).all():
+        if a.due_day and 1 <= a.due_day <= last_day:
+            eventos.setdefault(a.due_day, []).append({
+                "kind": "due", "label": f"Pago {a.name}",
+                "amount": a.minimum_payment, "currency": a.currency})
+
+    semanas = _cal.Calendar(firstweekday=0).monthdayscalendar(year, month)
+    prev_y, prev_m = (year - 1, 12) if month == 1 else (year, month - 1)
+    next_y, next_m = (year + 1, 1) if month == 12 else (year, month + 1)
+    return render_template("calendario.html", year=year, month=month, mes_nombre=MESES[month],
+                           semanas=semanas, eventos=eventos, hoy=hoy,
+                           prev_y=prev_y, prev_m=prev_m, next_y=next_y, next_m=next_m,
+                           tot_ing=tot_ing, tot_gas=tot_gas,
+                           base=current_user.settings.base_currency)
 
 
 @v2_bp.route("/recurrentes/<int:rule_id>/editar", methods=["GET", "POST"])

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Calendario{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h4 class="mb-0 page-title">Calendario — {{ mes_nombre }} {{ year }}</h4>
+  <div class="d-flex gap-2 align-items-center">
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('v2.calendario', year=prev_y, month=prev_m) }}">←</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('v2.calendario') }}">Hoy</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('v2.calendario', year=next_y, month=next_m) }}">→</a>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-in"></span> Ingresos recurrentes del mes</div>
+    <div class="fw-bold txt-in">{{ money(tot_ing) }}</div></div></div></div>
+  <div class="col-6"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-out"></span> Pagos recurrentes del mes</div>
+    <div class="fw-bold txt-out">{{ money(tot_gas) }}</div></div></div></div>
+</div>
+
+<div class="card shadow-sm"><div class="card-body p-2">
+  <div class="table-responsive">
+  <table class="table table-bordered align-top mb-0" style="table-layout:fixed">
+    <thead><tr class="text-center small">
+      <th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th>
+    </tr></thead>
+    <tbody>
+    {% for semana in semanas %}
+      <tr style="height:96px">
+      {% for dia in semana %}
+        {% if dia == 0 %}
+          <td class="bg-body-secondary"></td>
+        {% else %}
+          {% set es_hoy = (dia == hoy.day and month == hoy.month and year == hoy.year) %}
+          <td class="{{ 'border-primary border-2' if es_hoy }}">
+            <div class="small fw-bold {{ 'text-primary' if es_hoy }}">{{ dia }}</div>
+            {% for e in eventos.get(dia, []) %}
+              {% set cls = 'text-bg-success' if e.kind == 'income' else ('text-bg-warning' if e.kind == 'due' else 'text-bg-danger') %}
+              <div class="badge {{ cls }} d-block text-truncate text-start mb-1" style="max-width:100%" title="{{ e.label }} · {{ money(e.amount, e.currency) }}">
+                {{ '＋' if e.kind == 'income' else ('🗓' if e.kind == 'due' else '－') }} {{ e.label }}
+              </div>
+            {% endfor %}
+          </td>
+        {% endif %}
+      {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="small text-muted mt-2 d-flex gap-3 flex-wrap">
+    <span><span class="badge text-bg-success">＋</span> Ingreso recurrente</span>
+    <span><span class="badge text-bg-danger">－</span> Gasto recurrente</span>
+    <span><span class="badge text-bg-warning">🗓</span> Pago de tarjeta/préstamo</span>
+  </div>
+</div></div>
+{% endblock %}
