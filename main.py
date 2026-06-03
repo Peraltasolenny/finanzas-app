@@ -79,14 +79,24 @@ def dashboard():
     ingresos, gastos, neto = reports.totals(current_user, txs, rates)
     tasa_ahorro = (neto / ingresos * 100) if ingresos > 0 else 0.0
 
+    # Comparación: contra un rango específico (desde2/hasta2) o el periodo anterior.
+    desde2 = _parse_iso_date(request.args.get("desde2"))
+    hasta2 = _parse_iso_date(request.args.get("hasta2"))
     comp = None
-    if comparar:
+    if desde2 and hasta2:
+        ptxs = reports.filter_txs(
+            Transaction.query.filter(Transaction.user_id == uid), desde2, hasta2, currency=cur)
+        ping, pgas, pneto = reports.totals(current_user, ptxs, rates)
+        comp = {"ingresos": ping, "gastos": pgas, "neto": pneto,
+                "label": f"{desde2.strftime('%d/%m/%y')} – {hasta2.strftime('%d/%m/%y')}"}
+        comparar = True
+    elif comparar:
         pstart, pend = reports.prev_range(start, end)
         ptxs = reports.filter_txs(
             Transaction.query.filter(Transaction.user_id == uid), pstart, pend, currency=cur)
         ping, pgas, pneto = reports.totals(current_user, ptxs, rates)
         comp = {"ingresos": ping, "gastos": pgas, "neto": pneto,
-                "label": f"{pstart.strftime('%d/%m')} – {pend.strftime('%d/%m')}"}
+                "label": f"{pstart.strftime('%d/%m')} – {pend.strftime('%d/%m')} (periodo anterior)"}
 
     # Monto en inversiones (certificados, corretaje, inversión).
     inv_kinds = ["inversion", "certificado", "corretaje"]
@@ -133,6 +143,7 @@ def dashboard():
     return render_template(
         "dashboard.html", g=g, periodo_label=periodo_label,
         desde=start.isoformat(), hasta=end.isoformat(), cur=cur, comparar=comparar, comp=comp,
+        desde2=request.args.get("desde2", ""), hasta2=request.args.get("hasta2", ""),
         base=base, monedas=reports_monedas(current_user),
         ingresos=ingresos, gastos=gastos, neto=neto, tasa_ahorro=tasa_ahorro,
         inversiones_total=inversiones_total, avance_metas=avance_metas,
@@ -151,6 +162,37 @@ def reports_monedas(user):
         if r.code not in ms:
             ms.append(r.code)
     return ms
+
+
+@main_bp.route("/detalle")
+@login_required
+def detalle():
+    """Vista consolidada: todas las métricas y gráficos del periodo filtrado."""
+    uid = current_user.id
+    today = date.today()
+    g = request.args.get("g", "month")
+    desde = _parse_iso_date(request.args.get("desde"))
+    hasta = _parse_iso_date(request.args.get("hasta"))
+    cur = request.args.get("cur") or None
+    start, end, periodo_label = reports.period_range(g, desde, hasta, today)
+    rates = finance.get_rates(current_user)
+
+    txs = reports.filter_txs(
+        Transaction.query.filter(Transaction.user_id == uid), start, end, currency=cur)
+    ingresos, gastos, neto = reports.totals(current_user, txs, rates)
+    tasa_ahorro = (neto / ingresos * 100) if ingresos > 0 else 0.0
+    distribucion_pie = reports.expense_distribution(current_user, txs, rates)
+    tendencia = reports.trend_series(current_user, txs, start, end, rates)
+    salud = finance.health_breakdown(current_user, [t for t in txs if t.type == "expense"], rates)
+    gastos_cat, _tg = reports.category_breakdown(current_user, txs, rates, "expense")
+    ingresos_cat, _ti = reports.category_breakdown(current_user, txs, rates, "income")
+    return render_template(
+        "detalle.html", periodo_label=periodo_label, g=g,
+        desde=start.isoformat(), hasta=end.isoformat(), cur=cur,
+        ingresos=ingresos, gastos=gastos, neto=neto, tasa_ahorro=tasa_ahorro,
+        distribucion_pie=distribucion_pie, tendencia=tendencia, salud=salud,
+        gastos_cat=gastos_cat, ingresos_cat=ingresos_cat,
+        base=current_user.settings.base_currency)
 
 
 # ----------------- transacciones -----------------
@@ -177,16 +219,22 @@ def transactions():
         elif amount <= 0:
             flash("El monto debe ser mayor que cero.", "danger")
         else:
-            db.session.add(Transaction(
+            tx = Transaction(
                 user_id=uid, type=tipo, category_id=int(cat_id) if cat_id else None,
                 account_id=int(acc_id) if acc_id else None, currency=currency,
                 bucket=bucket if bucket in ("need", "want", "invest") else None,
                 amount=amount, description=desc, tx_date=tx_date,
                 merchant=request.form.get("merchant", "").strip() or None,
                 fee=_to_float(request.form.get("fee")),
-            ))
+            )
+            db.session.add(tx)
+            db.session.flush()
+            cb = finance.apply_cashback(current_user, tx)
             db.session.commit()
-            flash("Transacción registrada.", "success")
+            msg = "Transacción registrada."
+            if cb:
+                msg += f" Cashback acreditado: {cb.amount:,.2f}."
+            flash(msg, "success")
         return redirect(url_for("main.transactions",
                                 year=tx_date.year, month=tx_date.month))
 
@@ -347,13 +395,16 @@ def import_confirm():
         tipo = tipos[i] if i < len(tipos) and tipos[i] in ("income", "expense") else "expense"
         cat = cats[i] if i < len(cats) and cats[i] else None
         desc = (descripciones[i] if i < len(descripciones) else "")[:255]
-        db.session.add(Transaction(
+        tx = Transaction(
             user_id=uid, type=tipo,
             category_id=int(cat) if cat else None,
             account_id=account_id, currency=currency,
             amount=amount, description=desc,
             tx_date=_parse_iso_date(fechas[i]) or date.today(),
-        ))
+        )
+        db.session.add(tx)
+        db.session.flush()
+        finance.apply_cashback(current_user, tx)
         count += 1
     db.session.commit()
     flash(f"{count} transacciones importadas." if count else "No se importó ninguna transacción.",

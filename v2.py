@@ -330,9 +330,25 @@ def _producto_view(kinds, titulo, plantilla="accounts.html"):
     # Cuentas de ahorro disponibles como "principal" para complementarias.
     parents = Account.query.filter_by(user_id=uid, is_active=True).filter(
         Account.kind.in_(["ahorro", "corriente"])).order_by(Account.name).all()
+
+    # Totales de pasivos incluyendo sub-saldos por moneda y Credimás (en moneda base).
+    rates = finance.get_rates(current_user)
+    tot_deuda = sum(finance.liability_value(c, current_user, rates) for c in cuentas if c.is_liability)
+    tot_min = sum(
+        finance.to_base(c.minimum_payment, c.currency, current_user, rates)
+        + sum(finance.to_base(b.minimum_payment, b.currency, current_user, rates) for b in c.card_balances)
+        for c in cuentas if c.is_liability)
+    tot_limite = sum(
+        finance.to_base(c.credit_limit or 0, c.currency, current_user, rates)
+        + sum(finance.to_base(b.credit_limit or 0, b.currency, current_user, rates) for b in c.card_balances)
+        for c in cuentas if c.is_liability)
+    util_global = round(tot_deuda / tot_limite * 100, 1) if tot_limite > 0 else 0.0
+
     return render_template(plantilla, cuentas=cuentas, kinds=kinds, titulo=titulo,
                            kind_labels=ACCOUNT_KINDS, caps=CAPITALIZATIONS,
                            categorias=categorias, parents=parents,
+                           tot_deuda=tot_deuda, tot_min=tot_min, tot_limite=tot_limite,
+                           util_global=util_global,
                            base=current_user.settings.base_currency)
 
 
@@ -902,8 +918,18 @@ def familia():
         extract("month", Transaction.tx_date) == hoy.month).all()
     gastos_mes = sum(finance.to_base(t.amount, t.currency, current_user, rates) for t in txs)
 
-    # Cuentas que me han compartido y cuentas que yo comparto.
-    compartidas_conmigo = AccountShare.query.filter_by(user_id=uid).all()
+    # Cuentas compartidas conmigo: incluyo saldo y últimos movimientos (visibilidad).
+    compartidas_conmigo = []
+    for sh in AccountShare.query.filter_by(user_id=uid).all():
+        a = sh.account
+        if not a:
+            continue
+        ult = Transaction.query.filter_by(account_id=a.id).order_by(
+            Transaction.tx_date.desc(), Transaction.id.desc()).limit(5).all()
+        compartidas_conmigo.append({
+            "share": sh, "account": a,
+            "saldo": finance.to_base(a.balance, a.currency, current_user, rates),
+            "txs": ult})
     mis_cuentas = Account.query.filter_by(user_id=uid, is_active=True).order_by(Account.name).all()
 
     return render_template("familia.html", fam=fam, miembros=miembros, resumen=resumen,

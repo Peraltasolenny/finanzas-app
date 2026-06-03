@@ -238,6 +238,55 @@ def amortization(principal, annual_rate, months, extra=0.0, extra_interval=1):
     }
 
 
+# ----------------- cashback automático -----------------
+def apply_cashback(user, tx):
+    """Si la transacción (gasto) coincide con una regla de cashback de su tarjeta,
+    crea una transacción de ingreso por el cashback. Devuelve esa transacción o None."""
+    from models import CashbackRule, Category
+    if tx.type != "expense" or not tx.account_id or tx.amount <= 0:
+        return None
+    best = None
+    for r in CashbackRule.query.filter_by(account_id=tx.account_id).all():
+        match = False
+        if r.category_id and r.category_id == tx.category_id:
+            match = True
+        elif r.merchant and tx.merchant and r.merchant.lower() in tx.merchant.lower():
+            match = True
+        elif not r.category_id and not r.merchant:
+            match = True   # regla general
+        if match and (best is None or r.rate > best.rate):
+            best = r
+    if not best or best.rate <= 0:
+        return None
+    monto = round(tx.amount * best.rate / 100.0, 2)
+    if monto <= 0:
+        return None
+    cat = Category.query.filter_by(user_id=user.id, name="Cashback", type="income").first()
+    if cat is None:
+        cat = Category(user_id=user.id, name="Cashback", type="income")
+        db.session.add(cat)
+        db.session.flush()
+    fecha = tx.tx_date if best.payout == "immediate" else (best.payout_date or tx.tx_date)
+    cb = Transaction(
+        user_id=user.id, type="income", category_id=cat.id, account_id=tx.account_id,
+        amount=monto, currency=tx.currency, tx_date=fecha,
+        description=f"Cashback: {tx.description or tx.merchant or 'compra'}")
+    db.session.add(cb)
+    return cb
+
+
+# ----------------- pasivos (deuda real) -----------------
+def liability_value(account, user, rates=None):
+    """Deuda total de un pasivo en moneda base: saldo + sub-saldos por moneda + Credimás."""
+    rates = rates or get_rates(user)
+    val = to_base(account.balance, account.currency, user, rates)
+    for b in getattr(account, "card_balances", []):
+        val += to_base(b.balance, b.currency, user, rates)
+    for cl in getattr(account, "credit_lines", []):
+        val += to_base(cl.amount, account.currency, user, rates)
+    return val
+
+
 # ----------------- patrimonio neto -----------------
 def net_worth(user, rates=None):
     """Activos (cuentas/inversiones) menos pasivos (tarjetas/préstamos), en moneda base."""
@@ -245,7 +294,8 @@ def net_worth(user, rates=None):
     activos = pasivos = 0.0
     por_banco = {}
     for a in Account.query.filter_by(user_id=user.id, is_active=True).all():
-        val = to_base(a.balance, a.currency, user, rates)
+        val = liability_value(a, user, rates) if a.kind in LIABILITY_KINDS \
+            else to_base(a.balance, a.currency, user, rates)
         if a.kind in LIABILITY_KINDS:
             pasivos += val
             por_banco.setdefault(a.bank or "Sin banco", {"activo": 0.0, "pasivo": 0.0})

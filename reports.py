@@ -104,6 +104,20 @@ def trend_series(user, txs, start, end, rates):
     }
 
 
+def category_breakdown(user, txs, rates, tipo):
+    """Desglose por categoría (monto + %) para un tipo (income/expense)."""
+    cats = {}
+    for t in txs:
+        if t.type != tipo:
+            continue
+        nombre = t.category.name if t.category else "Sin categoría"
+        cats[nombre] = cats.get(nombre, 0.0) + finance.to_base(t.amount, t.currency, user, rates)
+    total = sum(cats.values())
+    items = sorted(cats.items(), key=lambda x: -x[1])
+    return [{"nombre": n, "monto": round(v, 2),
+             "pct": round(v / total * 100, 1) if total > 0 else 0.0} for n, v in items], round(total, 2)
+
+
 def expense_distribution(user, txs, rates):
     """Distribución de gastos por categoría (para gráfico circular)."""
     cats = {}

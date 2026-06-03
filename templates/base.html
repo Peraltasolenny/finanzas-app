@@ -124,6 +124,22 @@
     html.setAttribute('data-bs-theme', next);
     try { localStorage.setItem('fin-theme', next); } catch (e) {}
   }
+
+  // Vincular bancos: al elegir un banco registrado, prellena la tasa anual si está vacía.
+  var finBancos = {{ bancos_data|tojson }};
+  document.addEventListener('change', function (e) {
+    var el = e.target;
+    if (el && el.getAttribute && el.getAttribute('list') === 'bancos-list') {
+      var info = finBancos[el.value];
+      if (info && info.rate !== '') {
+        var form = el.closest('form');
+        if (form) {
+          var rate = form.querySelector('input[name="interest_rate"]');
+          if (rate && !rate.value) rate.value = info.rate;
+        }
+      }
+    }
+  });
 </script>
 </body>
 </html>

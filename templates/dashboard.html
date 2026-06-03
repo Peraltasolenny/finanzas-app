@@ -36,6 +36,11 @@
         <label class="form-check-label small" for="cmp">Comparar con periodo anterior</label></div>
     </div>
     <div class="col-auto"><button class="btn btn-sm btn-dark">Aplicar</button></div>
+    <div class="col-12"><div class="small text-muted">Comparar con un rango específico (opcional):</div></div>
+    <div class="col-auto"><label class="form-label small mb-0">Comparar desde</label>
+      <input type="date" name="desde2" value="{{ desde2 }}" class="form-control form-control-sm"></div>
+    <div class="col-auto"><label class="form-label small mb-0">Comparar hasta</label>
+      <input type="date" name="hasta2" value="{{ hasta2 }}" class="form-control form-control-sm"></div>
   </form>
   {% if comp %}<div class="small text-muted mt-1">Comparando con {{ comp.label }}: ingresos {{ money(comp.ingresos) }} · gastos {{ money(comp.gastos) }} · neto {{ money(comp.neto) }}</div>{% endif %}
 </div>
@@ -47,21 +52,21 @@
 {# Tarjetas KPI (clicables) #}
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-2">
-    <a class="text-decoration-none" href="{{ url_for('main.transactions', desde=desde, hasta=hasta) }}">
+    <a class="text-decoration-none" href="{{ url_for('main.detalle', g=g, desde=desde, hasta=hasta, cur=cur) }}">
     <div class="card kpi h-100"><div class="card-body">
       <div class="kpi-label"><span class="dot dot-in"></span> Ingresos</div>
       <div class="kpi-value txt-in">{{ money(ingresos) }}</div>{{ delta(ingresos, comp.ingresos if comp) }}
     </div></div></a>
   </div>
   <div class="col-6 col-lg-2">
-    <a class="text-decoration-none" href="{{ url_for('main.transactions', desde=desde, hasta=hasta) }}">
+    <a class="text-decoration-none" href="{{ url_for('main.detalle', g=g, desde=desde, hasta=hasta, cur=cur) }}">
     <div class="card kpi h-100"><div class="card-body">
       <div class="kpi-label"><span class="dot dot-out"></span> Gastos</div>
       <div class="kpi-value txt-out">{{ money(gastos) }}</div>{{ delta(gastos, comp.gastos if comp) }}
     </div></div></a>
   </div>
   <div class="col-6 col-lg-2">
-    <a class="text-decoration-none" href="{{ url_for('v2.salud') }}">
+    <a class="text-decoration-none" href="{{ url_for('main.detalle', g=g, desde=desde, hasta=hasta, cur=cur) }}">
     <div class="card kpi h-100"><div class="card-body">
       <div class="kpi-label"><span class="dot dot-net"></span> Flujo neto</div>
       <div class="kpi-value {{ 'txt-net' if neto >= 0 else 'txt-out' }}">{{ money(neto) }}</div>
@@ -69,7 +74,7 @@
     </div></div></a>
   </div>
   <div class="col-6 col-lg-2">
-    <a class="text-decoration-none" href="{{ url_for('v2.salud') }}">
+    <a class="text-decoration-none" href="{{ url_for('main.detalle', g=g, desde=desde, hasta=hasta, cur=cur) }}">
     <div class="card kpi h-100"><div class="card-body">
       <div class="kpi-label"><span class="dot dot-save"></span> Tasa de ahorro</div>
       <div class="kpi-value txt-save">{{ '%.1f'|format(tasa_ahorro) }}%</div>

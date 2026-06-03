@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Detalle{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h4 class="mb-0 page-title">Detalle <span class="text-muted fs-6">· {{ periodo_label }}</span></h4>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.dashboard', g=g, desde=desde, hasta=hasta, cur=cur) }}">← Dashboard</a>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-in"></span> Ingresos</div><div class="kpi-value txt-in">{{ money(ingresos) }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-out"></span> Gastos</div><div class="kpi-value txt-out">{{ money(gastos) }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-net"></span> Flujo neto</div><div class="kpi-value {{ 'txt-net' if neto >= 0 else 'txt-out' }}">{{ money(neto) }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
+    <div class="kpi-label"><span class="dot dot-save"></span> Tasa de ahorro</div><div class="kpi-value txt-save">{{ '%.1f'|format(tasa_ahorro) }}%</div></div></div></div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-7"><div class="card shadow-sm h-100"><div class="card-body">
+    <h5 class="card-title mb-3">Tendencia ingresos vs. gastos</h5>
+    {% if tendencia.labels %}<canvas id="t" height="120"></canvas>{% else %}<p class="text-muted mb-0">Sin datos.</p>{% endif %}
+  </div></div></div>
+  <div class="col-lg-5"><div class="card shadow-sm h-100"><div class="card-body">
+    <h5 class="card-title mb-3">Distribución de gastos</h5>
+    {% if distribucion_pie.labels %}<canvas id="p" height="220"></canvas>{% else %}<p class="text-muted mb-0">Sin gastos.</p>{% endif %}
+  </div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6"><div class="card shadow-sm h-100"><div class="card-body">
+    <h5 class="card-title mb-3">Gastos por categoría</h5>
+    <table class="table table-sm align-middle">
+      <tbody>
+      {% for c in gastos_cat %}
+        <tr><td>{{ c.nombre }}</td><td class="text-end">{{ money(c.monto) }}</td>
+          <td style="width:35%"><div class="progress" style="height:14px"><div class="progress-bar bg-danger" style="width: {{ c.pct }}%">{{ c.pct }}%</div></div></td></tr>
+      {% else %}<tr><td class="text-muted">Sin gastos.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div></div></div>
+  <div class="col-lg-6"><div class="card shadow-sm h-100"><div class="card-body">
+    <h5 class="card-title mb-3">Ingresos por categoría</h5>
+    <table class="table table-sm align-middle">
+      <tbody>
+      {% for c in ingresos_cat %}
+        <tr><td>{{ c.nombre }}</td><td class="text-end">{{ money(c.monto) }}</td>
+          <td style="width:35%"><div class="progress" style="height:14px"><div class="progress-bar bg-success" style="width: {{ c.pct }}%">{{ c.pct }}%</div></div></td></tr>
+      {% else %}<tr><td class="text-muted">Sin ingresos.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div></div></div>
+</div>
+
+<div class="card shadow-sm mt-3"><div class="card-body">
+  <h5 class="card-title mb-3">Distribución 50 / 30 / 20</h5>
+  {% for f in salud.filas %}
+  <div class="mb-2"><div class="d-flex justify-content-between small mb-1"><span class="fw-semibold">{{ f.label }}</span>
+    <span class="text-muted">{{ money(f.monto) }} · {{ f.real_pct }}% (meta {{ '%g'|format(f.meta_pct) }}%)</span></div>
+    <div class="progress" style="height:16px">{% set color = 'bg-info' if f.key=='invest' else ('bg-primary' if f.key=='need' else 'bg-warning') %}<div class="progress-bar {{ color }}" style="width: {{ [f.real_pct,100]|min }}%"></div></div></div>
+  {% endfor %}
+</div></div>
+
+<script>
+  const pal = ['#7c5cff','#22c55e','#ef4444','#f59e0b','#06b6d4','#ec4899','#8b5cf6','#14b8a6','#f97316','#64748b'];
+  {% if tendencia.labels %}new Chart(document.getElementById('t'),{type:'line',data:{labels:{{ tendencia.labels|tojson }},datasets:[{label:'Ingresos',data:{{ tendencia.ingresos|tojson }},borderColor:'#22c55e',tension:.3},{label:'Gastos',data:{{ tendencia.gastos|tojson }},borderColor:'#ef4444',tension:.3}]},options:{plugins:{legend:{labels:{color:'#9aa'}}},scales:{x:{ticks:{color:'#9aa'}},y:{ticks:{color:'#9aa'}}}}});{% endif %}
+  {% if distribucion_pie.labels %}new Chart(document.getElementById('p'),{type:'doughnut',data:{labels:{{ distribucion_pie.labels|tojson }},datasets:[{data:{{ distribucion_pie.valores|tojson }},backgroundColor:pal}]},options:{plugins:{legend:{position:'right',labels:{color:'#9aa',boxWidth:12}}}}});{% endif %}
+</script>
+{% endblock %}

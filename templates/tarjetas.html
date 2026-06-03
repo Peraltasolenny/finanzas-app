@@ -43,26 +43,22 @@
   </div></div>
 </div>
 
-{# Totales #}
-{% set total_lim = cuentas|selectattr('credit_limit')|map(attribute='credit_limit')|sum %}
-{% set total_usado = cuentas|sum(attribute='balance') %}
-{% set total_min = cuentas|sum(attribute='minimum_payment') %}
+{# Totales (incluyen sub-saldos por moneda y Credimás, convertidos a {{ base }}) #}
 <div class="row g-3 mb-3">
   <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
     <div class="kpi-label"><span class="dot dot-out"></span> Deuda vigente</div>
-    <div class="fw-bold txt-out">{{ money(total_usado) }}</div></div></div></div>
+    <div class="fw-bold txt-out">{{ money(tot_deuda) }}</div></div></div></div>
   <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
     <div class="kpi-label"><span class="dot dot-out"></span> Pago mínimo total</div>
-    <div class="fw-bold">{{ money(total_min) }}</div></div></div></div>
+    <div class="fw-bold">{{ money(tot_min) }}</div></div></div></div>
   <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
     <div class="kpi-label"><span class="dot dot-net"></span> Límite total</div>
-    <div class="fw-bold">{{ money(total_lim) }}</div></div></div></div>
+    <div class="fw-bold">{{ money(tot_limite) }}</div></div></div></div>
   <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body py-2">
     <div class="kpi-label"><span class="dot dot-save"></span> Utilización global</div>
-    {% set util_global = (total_usado / total_lim * 100)|round(1) if total_lim > 0 else 0 %}
     <div class="fw-bold {{ 'txt-out' if util_global > 50 else '' }}">{{ util_global }}%</div></div></div></div>
 </div>
-{% if total_lim > 0 %}
+{% if tot_limite > 0 %}
 <div class="card shadow-sm mb-3"><div class="card-body py-2">
   {% set color = 'bg-success' if util_global <= 30 else ('bg-warning' if util_global <= 50 else 'bg-danger') %}
   <div class="progress" style="height:16px"><div class="progress-bar {{ color }}" style="width: {{ [util_global,100]|min }}%">{{ util_global }}%</div></div>

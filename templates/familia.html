@@ -108,18 +108,26 @@
       </form>
 
       <h6 class="small text-muted">Compartidas conmigo</h6>
-      <table class="table table-sm align-middle">
-        <tbody>
-        {% for sh in compartidas_conmigo %}
-          <tr>
-            <td>{{ sh.account.name }} <span class="small text-muted">— {{ sh.account.bank or 'sin banco' }}</span></td>
-            <td><span class="badge {{ 'text-bg-success' if sh.can_register else 'text-bg-secondary' }}">{{ 'Ver y registrar' if sh.can_register else 'Solo ver' }}</span></td>
-          </tr>
-        {% else %}
-          <tr><td colspan="2" class="text-muted small">Nadie ha compartido cuentas contigo todavía.</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
+      {% for ci in compartidas_conmigo %}
+        <div class="border rounded p-2 mb-2">
+          <div class="d-flex justify-content-between">
+            <div><strong>{{ ci.account.name }}</strong> <span class="small text-muted">— {{ ci.account.bank or 'sin banco' }}</span></div>
+            <span class="badge {{ 'text-bg-success' if ci.share.can_register else 'text-bg-secondary' }}">{{ 'Ver y registrar' if ci.share.can_register else 'Solo ver' }}</span>
+          </div>
+          <div class="small">Saldo: <strong>{{ money(ci.saldo) }}</strong></div>
+          {% if ci.txs %}
+          <table class="table table-sm mb-0 mt-1"><tbody>
+            {% for t in ci.txs %}
+            <tr><td class="small">{{ t.tx_date.strftime('%d/%m') }}</td>
+              <td class="small text-muted">{{ t.description or (t.category.name if t.category else '—') }}</td>
+              <td class="small text-end {{ 'txt-in' if t.type=='income' else 'txt-out' }}">{{ money(t.amount, t.currency) }}</td></tr>
+            {% endfor %}
+          </tbody></table>
+          {% else %}<div class="small text-muted">Sin movimientos.</div>{% endif %}
+        </div>
+      {% else %}
+        <p class="text-muted small">Nadie ha compartido cuentas contigo todavía.</p>
+      {% endfor %}
     </div></div>
   </div>
 </div>
