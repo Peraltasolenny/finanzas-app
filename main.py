@@ -131,7 +131,7 @@ def dashboard():
     for t in txs:
         if t.type == "expense":
             gasto_por_cat[t.category_id] = gasto_por_cat.get(t.category_id, 0.0) + \
-                finance.to_base(t.amount, t.currency, current_user, rates)
+                finance.tx_value_base(t, current_user, rates)
     filas_presupuesto = []
     for c in Category.query.filter_by(user_id=uid, type="expense", is_active=True).order_by(Category.name).all():
         presup = presupuestos.get(c.id, 0.0)
@@ -224,9 +224,9 @@ def transactions():
                 user_id=uid, type=tipo, category_id=int(cat_id) if cat_id else None,
                 account_id=int(acc_id) if acc_id else None, currency=currency,
                 bucket=bucket if bucket in ("need", "want", "invest") else None,
-                amount=amount, description=desc, tx_date=tx_date,
+                amount=round(amount, 2), description=desc, tx_date=tx_date,
                 merchant=request.form.get("merchant", "").strip() or None,
-                fee=_to_float(request.form.get("fee")),
+                fee=round(_to_float(request.form.get("fee")), 2),
             )
             db.session.add(tx)
             db.session.flush()
@@ -269,7 +269,7 @@ def transactions():
     rates = finance.get_rates(current_user)
     total_ingresos = sum(finance.to_base(t.amount, t.currency, current_user, rates)
                          for t in txs if t.type == "income")
-    total_gastos = sum(finance.to_base(t.amount, t.currency, current_user, rates)
+    total_gastos = sum(finance.tx_value_base(t, current_user, rates)
                        for t in txs if t.type == "expense")
 
     categorias = Category.query.filter_by(
@@ -317,10 +317,10 @@ def edit_transaction(tx_id):
         tx.currency = request.form.get("currency", "").strip() or None
         b = request.form.get("bucket") or None
         tx.bucket = b if b in ("need", "want", "invest") else None
-        tx.amount = _to_float(request.form.get("amount"))
+        tx.amount = round(_to_float(request.form.get("amount")), 2)
         tx.description = request.form.get("description", "").strip()
         tx.merchant = request.form.get("merchant", "").strip() or None
-        tx.fee = _to_float(request.form.get("fee"))
+        tx.fee = round(_to_float(request.form.get("fee")), 2)
         d = _parse_iso_date(request.form.get("tx_date"))
         if d:
             tx.tx_date = d
@@ -554,7 +554,7 @@ def budget():
             Transaction.user_id == uid, Transaction.type == "expense",
             extract("year", Transaction.tx_date) == y,
             extract("month", Transaction.tx_date) == m).all()
-        gastado = sum(finance.to_base(t.amount, t.currency, current_user, rates) for t in txs)
+        gastado = sum(finance.tx_value_base(t, current_user, rates) for t in txs)
         pct = (gastado / presup * 100) if presup > 0 else None
         historico.append({"label": f"{MESES[m][:3]} {y}", "presupuestado": presup,
                           "gastado": gastado, "pct": pct})

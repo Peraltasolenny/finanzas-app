@@ -62,9 +62,9 @@ def filter_txs(query, start, end, currency=None, account_id=None, bank=None,
 
 
 def totals(user, txs, rates):
-    """Suma ingresos, gastos y neto (convertido a moneda base)."""
+    """Suma ingresos, gastos y neto (convertido a moneda base; gastos incluyen el costo)."""
     ing = sum(finance.to_base(t.amount, t.currency, user, rates) for t in txs if t.type == "income")
-    gas = sum(finance.to_base(t.amount, t.currency, user, rates) for t in txs if t.type == "expense")
+    gas = sum(finance.tx_value_base(t, user, rates) for t in txs if t.type == "expense")
     return round(ing, 2), round(gas, 2), round(ing - gas, 2)
 
 
@@ -91,11 +91,10 @@ def trend_series(user, txs, start, end, rates):
     for t in txs:
         k, label = keyfor(t.tx_date)
         b = buckets.setdefault(k, [k, label, 0.0, 0.0])
-        val = finance.to_base(t.amount, t.currency, user, rates)
         if t.type == "income":
-            b[2] += val
+            b[2] += finance.to_base(t.amount, t.currency, user, rates)
         else:
-            b[3] += val
+            b[3] += finance.tx_value_base(t, user, rates)
     ordenado = sorted(buckets.values(), key=lambda x: x[0])
     return {
         "labels": [b[1] for b in ordenado],
@@ -111,7 +110,7 @@ def category_breakdown(user, txs, rates, tipo):
         if t.type != tipo:
             continue
         nombre = t.category.name if t.category else "Sin categoría"
-        cats[nombre] = cats.get(nombre, 0.0) + finance.to_base(t.amount, t.currency, user, rates)
+        cats[nombre] = cats.get(nombre, 0.0) + finance.tx_value_base(t, user, rates)
     total = sum(cats.values())
     items = sorted(cats.items(), key=lambda x: -x[1])
     return [{"nombre": n, "monto": round(v, 2),
@@ -125,6 +124,6 @@ def expense_distribution(user, txs, rates):
         if t.type != "expense":
             continue
         nombre = t.category.name if t.category else "Sin categoría"
-        cats[nombre] = cats.get(nombre, 0.0) + finance.to_base(t.amount, t.currency, user, rates)
+        cats[nombre] = cats.get(nombre, 0.0) + finance.tx_value_base(t, user, rates)
     items = sorted(cats.items(), key=lambda x: -x[1])
     return {"labels": [i[0] for i in items], "valores": [round(i[1], 2) for i in items]}

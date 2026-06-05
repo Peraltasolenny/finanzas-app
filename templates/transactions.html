@@ -152,6 +152,7 @@
             <td class="small text-muted">{{ t.description }}{% if t.recurring_rule_id %} <span class="badge text-bg-light text-dark">🔁</span>{% endif %}</td>
             <td class="text-end fw-bold {{ 'text-success' if t.type == 'income' else 'text-danger' }}">
               {{ '+' if t.type == 'income' else '−' }}{{ money(t.amount, t.currency) }}
+              {% if t.fee %}<div class="small text-muted fw-normal">+ {{ money(t.fee, t.currency) }} costo = {{ money(t.amount + t.fee, t.currency) }}</div>{% endif %}
             </td>
             <td class="text-end">
               <div class="d-inline-flex gap-1">

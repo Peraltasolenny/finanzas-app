@@ -27,6 +27,14 @@ def to_base(amount, currency, user, rates=None):
     return amount * rates.get(currency, 1.0)
 
 
+def tx_value_base(t, user, rates=None):
+    """Valor de la transacción en moneda base. En gastos incluye el costo (fee)."""
+    val = to_base(t.amount, t.currency, user, rates)
+    if t.type == "expense" and getattr(t, "fee", 0):
+        val += to_base(t.fee, t.currency, user, rates)
+    return val
+
+
 # ----------------- nómina e ISR (DGII República Dominicana) -----------------
 # Escala ANUAL del ISR asalariado (DOP). Tramos: (límite_superior, tasa, base_acumulada).
 ISR_BRACKETS = [
@@ -146,7 +154,7 @@ def health_breakdown(user, transactions, rates=None):
         if t.type != "expense":
             continue
         b = t.effective_bucket or "sin"
-        sums[b] = sums.get(b, 0.0) + to_base(t.amount, t.currency, user, rates)
+        sums[b] = sums.get(b, 0.0) + tx_value_base(t, user, rates)
     total = sums["need"] + sums["want"] + sums["invest"] + sums["sin"]
     s = user.settings
     metas = {"need": s.pct_need, "want": s.pct_want, "invest": s.pct_invest}
