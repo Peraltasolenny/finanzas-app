@@ -354,16 +354,35 @@ def import_statement():
             flash("Selecciona un archivo (PDF, CSV o Excel).", "danger")
             return redirect(url_for("main.import_statement"))
 
-        rows, error = parse_statement(file.stream, file.filename)
+        rows, error, info = parse_statement(file.stream, file.filename)
         if error:
             flash(error, "danger")
             return redirect(url_for("main.import_statement"))
 
-        flash(f"Se detectaron {len(rows)} movimientos. Revísalos y confirma cuáles importar.", "info")
+        # Marca posibles duplicados: misma fecha (±3 días) y mismo monto que algo existente.
+        from datetime import timedelta
+        fechas = [r["tx_date"] for r in rows]
+        lo, hi = min(fechas) - timedelta(days=3), max(fechas) + timedelta(days=3)
+        existentes = Transaction.query.filter(
+            Transaction.user_id == uid, Transaction.tx_date >= lo, Transaction.tx_date <= hi).all()
+        n_dup = 0
+        for r in rows:
+            r["dup"] = any(abs((e.tx_date - r["tx_date"]).days) <= 3
+                           and abs(e.amount - r["amount"]) < 0.01 for e in existentes)
+            if r["dup"]:
+                n_dup += 1
+
+        due_date = info.get("due_date")
+        msg = f"Se detectaron {len(rows)} movimientos."
+        if n_dup:
+            msg += f" {n_dup} parecen duplicados (desmarcados para tu revisión)."
+        if due_date:
+            msg += f" Fecha de pago detectada: {due_date.strftime('%d/%m/%Y')}."
+        flash(msg, "info")
         return render_template("import.html", review=True, rows=rows,
                                categorias=categorias, accounts=accounts, base=base,
-                               # cuenta preseleccionada si la subieron en el paso 1
                                sel_account=request.form.get("account_id", ""),
+                               due_date=due_date.isoformat() if due_date else "",
                                filename=file.filename)
 
     return render_template("import.html", review=False, categorias=categorias,
@@ -385,6 +404,14 @@ def import_confirm():
     acc_id = request.form.get("account_id") or None
     account_id = int(acc_id) if acc_id else None
     currency = request.form.get("currency", "").strip() or None
+
+    # Si detectó fecha de pago y hay cuenta, actualiza el día de pago de esa cuenta.
+    due = _parse_iso_date(request.form.get("due_date"))
+    if account_id and due:
+        from models import Account
+        acc = db.session.get(Account, account_id)
+        if acc and acc.user_id == uid:
+            acc.due_day = due.day
 
     count = 0
     for i in range(len(fechas)):

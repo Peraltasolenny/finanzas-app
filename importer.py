@@ -83,6 +83,36 @@ def _clean_desc(text):
 
 
 # ----------------- PDF -----------------
+_MES_ABBR = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6,
+             "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12}
+
+
+def _parse_spanish_date(s):
+    """Reconoce 'DD mmm YYYY' (ej. '22 jun 2026') o dd/mm/yyyy."""
+    m = re.search(r"(\d{1,2})\s+([a-záéíóú]{3,})\.?\s+(\d{4})", s, re.I)
+    if m:
+        mon = _MES_ABBR.get(m.group(2)[:3].lower())
+        if mon:
+            try:
+                return date(int(m.group(3)), mon, int(m.group(1)))
+            except ValueError:
+                return None
+    return _parse_date(s.strip())
+
+
+def _detect_due_date(text):
+    """Busca la fecha límite de pago en el estado de cuenta."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if re.search(r"fecha\s*l[íi]mite\s*de\s*pago|fecha\s*de\s*pago", line, re.I):
+            # La fecha suele estar en la misma línea o en las siguientes.
+            for j in range(i, min(i + 4, len(lines))):
+                d = _parse_spanish_date(lines[j])
+                if d:
+                    return d
+    return None
+
+
 def parse_pdf(fileobj):
     import logging
     import pdfplumber  # import perezoso: solo si se usa
@@ -91,9 +121,11 @@ def parse_pdf(fileobj):
     logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
     rows = []
+    textos = []
     with pdfplumber.open(fileobj) as pdf:
         for page in pdf.pages:
             text = page.extract_text() or ""
+            textos.append(text)
             for line in text.splitlines():
                 m = _PDF_LINE_RE.match(line)
                 if not m:
@@ -106,7 +138,8 @@ def parse_pdf(fileobj):
                         "tx_date": d, "description": desc[:255],
                         "amount": amount, "type": _guess_type(desc),
                     })
-    return rows
+    due_date = _detect_due_date("\n".join(textos))
+    return rows, due_date
 
 
 # ----------------- CSV / Excel -----------------
@@ -180,23 +213,23 @@ def parse_excel(fileobj):
 
 # ----------------- dispatcher -----------------
 def parse_statement(fileobj, filename):
-    """Devuelve (rows, error). rows es lista de dicts; error es str o None."""
+    """Devuelve (rows, error, info). info incluye la fecha de pago detectada."""
     ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
     if ext not in ALLOWED_EXTENSIONS:
-        return [], f"Tipo de archivo no soportado: {ext or 'desconocido'}. Usa PDF, CSV o Excel."
+        return [], f"Tipo de archivo no soportado: {ext or 'desconocido'}. Usa PDF, CSV o Excel.", {}
+    due_date = None
     try:
         if ext == ".pdf":
-            rows = parse_pdf(fileobj)
+            rows, due_date = parse_pdf(fileobj)
         elif ext == ".csv":
             rows = parse_csv(fileobj)
         else:  # .xlsx / .xls
             rows = parse_excel(fileobj)
     except Exception as exc:  # noqa: BLE001 — queremos mostrar el error al usuario
-        return [], f"No se pudo leer el archivo: {exc}"
+        return [], f"No se pudo leer el archivo: {exc}", {}
 
     if not rows:
         return [], ("No se detectaron movimientos. Si es un PDF escaneado (imagen), "
-                    "el texto no se puede extraer; exporta el movimiento en CSV/Excel desde tu banco.")
-    # Ordena por fecha ascendente.
+                    "el texto no se puede extraer; exporta el movimiento en CSV/Excel desde tu banco."), {}
     rows.sort(key=lambda r: r["tx_date"])
-    return rows, None
+    return rows, None, {"due_date": due_date}

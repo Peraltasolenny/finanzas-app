@@ -67,6 +67,10 @@
         <span class="small text-muted">Asocia el estado de cuenta a una de tus cuentas/tarjetas para que los movimientos se vean en <strong>Por banco</strong> y se conviertan a tu moneda base. <a href="{{ url_for('v2.cuentas') }}">¿No tienes cuentas?</a></span>
       </div>
     </div>
+    {% if due_date %}
+    <input type="hidden" name="due_date" value="{{ due_date }}">
+    <div class="alert alert-info small py-2">🗓 <strong>Fecha de pago detectada:</strong> {{ due_date }}. Si eliges una tarjeta/cuenta arriba, se actualizará su día de pago automáticamente.</div>
+    {% endif %}
     <div class="table-responsive">
     <table class="table table-sm align-middle">
       <thead><tr>
@@ -75,10 +79,10 @@
       </tr></thead>
       <tbody>
       {% for r in rows %}
-        <tr>
-          <td><input type="checkbox" class="form-check-input fin-include" name="include" value="{{ loop.index0 }}" checked></td>
+        <tr class="{{ 'table-warning' if r.dup }}">
+          <td><input type="checkbox" class="form-check-input fin-include" name="include" value="{{ loop.index0 }}" {{ '' if r.dup else 'checked' }}></td>
           <td><input type="date" name="tx_date" value="{{ r.tx_date.isoformat() }}" class="form-control form-control-sm" style="width:150px"></td>
-          <td><input type="text" name="description" value="{{ r.description }}" class="form-control form-control-sm"></td>
+          <td><input type="text" name="description" value="{{ r.description }}" class="form-control form-control-sm">{% if r.dup %}<span class="badge text-bg-warning d-block mt-1">⚠ posible duplicado</span>{% endif %}</td>
           <td>
             <select name="type" class="form-select form-select-sm" style="width:110px">
               <option value="expense" {{ 'selected' if r.type == 'expense' }}>Gasto</option>
