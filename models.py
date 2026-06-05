@@ -414,6 +414,23 @@ class CashbackRule(db.Model):
     category = db.relationship("Category")
 
 
+class PendingCashback(db.Model):
+    """Cashback acumulado que se acreditará en una fecha futura (acreditación diferida)."""
+    __tablename__ = "pending_cashback"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=True)
+    amount = db.Column(db.Float, nullable=False, default=0.0)
+    currency = db.Column(db.String(8), nullable=True)
+    payout_date = db.Column(db.Date, nullable=False, default=date.today)
+    description = db.Column(db.String(255), default="")
+    credited = db.Column(db.Boolean, nullable=False, default=False)
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transactions.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    account = db.relationship("Account")
+
+
 class Family(db.Model):
     """Grupo familiar: usuarios que comparten metas, gastos y patrimonio."""
     __tablename__ = "families"

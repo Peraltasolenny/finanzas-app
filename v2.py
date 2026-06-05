@@ -419,7 +419,12 @@ def tarjeta_detalle(acc_id):
         return redirect(url_for("v2.tarjetas"))
     categorias = Category.query.filter_by(
         user_id=current_user.id, type="expense", is_active=True).order_by(Category.name).all()
+    from models import PendingCashback
+    pendientes = PendingCashback.query.filter_by(
+        account_id=card.id, credited=False).order_by(PendingCashback.payout_date).all()
+    cashback_pendiente = sum(p.amount for p in pendientes)
     return render_template("tarjeta_detalle.html", card=card, categorias=categorias,
+                           pendientes=pendientes, cashback_pendiente=cashback_pendiente,
                            base=current_user.settings.base_currency)
 
 

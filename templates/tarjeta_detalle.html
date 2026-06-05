@@ -78,6 +78,14 @@
     {# Cashback #}
     <div class="card shadow-sm"><div class="card-body">
       <h5 class="card-title mb-3">Reglas de cashback / recompensa</h5>
+      {% if cashback_pendiente > 0 %}
+        <div class="alert alert-info small py-2">
+          <strong>Cashback pendiente:</strong> {{ money(cashback_pendiente) }} — se acreditará en su fecha.
+          <ul class="mb-0 mt-1">
+            {% for p in pendientes %}<li>{{ money(p.amount, p.currency) }} el {{ p.payout_date.strftime('%d/%m/%Y') }}</li>{% endfor %}
+          </ul>
+        </div>
+      {% endif %}
       {% for r in card.cashback_rules %}
         <div class="d-flex justify-content-between align-items-center border-bottom py-1">
           <div class="small">

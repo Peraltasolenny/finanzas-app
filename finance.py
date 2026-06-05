@@ -261,18 +261,56 @@ def apply_cashback(user, tx):
     monto = round(tx.amount * best.rate / 100.0, 2)
     if monto <= 0:
         return None
+    from datetime import date as _date
+    from models import PendingCashback
+    desc = f"Cashback: {tx.description or tx.merchant or 'compra'}"
+
+    # Diferido: si la regla paga "a fecha" y esa fecha es futura, queda pendiente.
+    if best.payout == "date" and best.payout_date and best.payout_date > _date.today():
+        pc = PendingCashback(user_id=user.id, account_id=tx.account_id, amount=monto,
+                             currency=tx.currency, payout_date=best.payout_date,
+                             description=desc, transaction_id=tx.id)
+        db.session.add(pc)
+        return None   # aún no se acredita
+
+    # Inmediato (o fecha ya pasada): se acredita ahora.
+    cat = _cashback_category(user)
+    cb = Transaction(
+        user_id=user.id, type="income", category_id=cat.id, account_id=tx.account_id,
+        amount=monto, currency=tx.currency, tx_date=tx.tx_date, description=desc)
+    db.session.add(cb)
+    return cb
+
+
+def _cashback_category(user):
+    from models import Category
     cat = Category.query.filter_by(user_id=user.id, name="Cashback", type="income").first()
     if cat is None:
         cat = Category(user_id=user.id, name="Cashback", type="income")
         db.session.add(cat)
         db.session.flush()
-    fecha = tx.tx_date if best.payout == "immediate" else (best.payout_date or tx.tx_date)
-    cb = Transaction(
-        user_id=user.id, type="income", category_id=cat.id, account_id=tx.account_id,
-        amount=monto, currency=tx.currency, tx_date=fecha,
-        description=f"Cashback: {tx.description or tx.merchant or 'compra'}")
-    db.session.add(cb)
-    return cb
+    return cat
+
+
+def credit_due_cashback(user, today=None):
+    """Materializa el cashback pendiente cuya fecha de acreditación ya llegó."""
+    from datetime import date as _date
+    from models import PendingCashback, Transaction
+    today = today or _date.today()
+    pendientes = PendingCashback.query.filter_by(user_id=user.id, credited=False).filter(
+        PendingCashback.payout_date <= today).all()
+    n = 0
+    if pendientes:
+        cat = _cashback_category(user)
+        for p in pendientes:
+            db.session.add(Transaction(
+                user_id=user.id, type="income", category_id=cat.id, account_id=p.account_id,
+                amount=p.amount, currency=p.currency, tx_date=p.payout_date,
+                description=p.description or "Cashback"))
+            p.credited = True
+            n += 1
+        db.session.commit()
+    return n
 
 
 # ----------------- pasivos (deuda real) -----------------

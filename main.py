@@ -61,6 +61,7 @@ def dashboard():
     uid = current_user.id
     today = date.today()
     finance.generate_due_transactions(current_user)
+    finance.credit_due_cashback(current_user)
 
     # Filtros: granularidad, rango personalizado, moneda, comparación.
     g = request.args.get("g", "month")
