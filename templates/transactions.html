@@ -142,17 +142,20 @@
     <div class="card shadow-sm"><div class="card-body">
       {% if transactions %}
       <table class="table table-sm table-hover align-middle">
-        <thead><tr><th>Fecha</th><th>Categoría</th><th>Cuenta</th><th>Descripción</th><th class="text-end">Monto</th><th></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Categoría</th><th>Cuenta</th><th>Descripción</th>
+          <th class="text-end">Monto</th><th class="text-end">Costo</th><th class="text-end">Total</th><th></th></tr></thead>
         <tbody>
         {% for t in transactions %}
+          {% set total = t.amount + (t.fee if t.type == 'expense' else 0) %}
           <tr>
             <td class="small">{{ t.tx_date.strftime('%d/%m') }}</td>
             <td class="fw-semibold">{{ t.category.name if t.category else '—' }}</td>
             <td class="small text-muted">{{ t.account.bank or t.account.name if t.account else '—' }}</td>
             <td class="small text-muted">{{ t.description }}{% if t.recurring_rule_id %} <span class="badge text-bg-light text-dark">🔁</span>{% endif %}</td>
+            <td class="text-end">{{ money(t.amount, t.currency) }}</td>
+            <td class="text-end small {{ 'text-danger' if t.fee }}">{% if t.fee %}{{ money(t.fee, t.currency) }}{% else %}—{% endif %}</td>
             <td class="text-end fw-bold {{ 'text-success' if t.type == 'income' else 'text-danger' }}">
-              {{ '+' if t.type == 'income' else '−' }}{{ money(t.amount, t.currency) }}
-              {% if t.fee %}<div class="small text-muted fw-normal">+ {{ money(t.fee, t.currency) }} costo = {{ money(t.amount + t.fee, t.currency) }}</div>{% endif %}
+              {{ '+' if t.type == 'income' else '−' }}{{ money(total, t.currency) }}
             </td>
             <td class="text-end">
               <div class="d-inline-flex gap-1">
