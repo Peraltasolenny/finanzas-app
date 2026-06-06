@@ -134,7 +134,8 @@ a { text-decoration: none; }
 .kpi { position: relative; overflow: hidden; }
 .kpi .kpi-label { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--fin-muted); font-weight: 600; }
 .kpi .kpi-label .dot { width: 8px; height: 8px; border-radius: 99px; }
-.kpi .kpi-value { font-size: 1.7rem; font-weight: 700; margin-top: .55rem; }
+.kpi .kpi-value { font-size: 1.25rem; font-weight: 700; margin-top: .4rem; line-height: 1.15; white-space: nowrap; }
+@media (min-width: 1400px) { .kpi .kpi-value { font-size: 1.45rem; } }
 .kpi .kpi-sub { font-size: .78rem; color: var(--fin-faint); margin-top: .55rem; }
 .dot-in  { background: var(--fin-pos); } .txt-in  { color: var(--fin-pos); }
 .dot-out { background: var(--fin-neg); } .txt-out { color: var(--fin-neg); }
