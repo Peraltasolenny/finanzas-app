@@ -165,6 +165,28 @@
     var next = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
     html.setAttribute('data-bs-theme', next);
     try { localStorage.setItem('fin-theme', next); } catch (e) {}
+    finRefreshCharts();
+  }
+
+  // Actualiza los colores de todos los gráficos al cambiar de tema (sin recargar).
+  function finRefreshCharts() {
+    if (!window.Chart || !Chart.instances) return;
+    var col = finChartColor(), grid = finGridColor();
+    Chart.defaults.color = col;
+    Object.keys(Chart.instances).forEach(function (k) {
+      var ch = Chart.instances[k];
+      try {
+        var lg = ch.options.plugins && ch.options.plugins.legend;
+        if (lg && lg.labels) lg.labels.color = col;
+        if (ch.options.scales) {
+          ['x', 'y'].forEach(function (ax) {
+            var s = ch.options.scales[ax];
+            if (s) { if (s.ticks) s.ticks.color = col; if (s.grid) s.grid.color = grid; }
+          });
+        }
+        ch.update();
+      } catch (e) {}
+    });
   }
 
   // Vincular bancos: al elegir un banco registrado, prellena la tasa anual si está vacía.
