@@ -64,7 +64,7 @@
 
 <script>
   const pal = ['#7c5cff','#22c55e','#ef4444','#f59e0b','#06b6d4','#ec4899','#8b5cf6','#14b8a6','#f97316','#64748b'];
-  {% if tendencia.labels %}new Chart(document.getElementById('t'),{type:'line',data:{labels:{{ tendencia.labels|tojson }},datasets:[{label:'Ingresos',data:{{ tendencia.ingresos|tojson }},borderColor:'#22c55e',tension:.3},{label:'Gastos',data:{{ tendencia.gastos|tojson }},borderColor:'#ef4444',tension:.3}]},options:{plugins:{legend:{labels:{color:'#9aa'}}},scales:{x:{ticks:{color:'#9aa'}},y:{ticks:{color:'#9aa'}}}}});{% endif %}
+  {% if tendencia.labels %}new Chart(document.getElementById('t'),{type:'line',data:{labels:{{ tendencia.labels|tojson }},datasets:[{label:'Ingresos',data:{{ tendencia.ingresos|tojson }},borderColor:'#22c55e',tension:.3},{label:'Gastos',data:{{ tendencia.gastos|tojson }},borderColor:'#ef4444',tension:.3}]},options:{plugins:{legend:{labels:{color:finChartColor()}}},scales:{x:{ticks:{color:finChartColor()},grid:{color:finGridColor()}},y:{ticks:{color:finChartColor()},grid:{color:finGridColor()}}}}});{% endif %}
   {% if distribucion_pie.labels %}new Chart(document.getElementById('p'),{type:'doughnut',data:{labels:{{ distribucion_pie.labels|tojson }},datasets:[{data:{{ distribucion_pie.valores|tojson }},backgroundColor:pal}]},options:finPieOptions()});{% endif %}
 </script>
 {% endblock %}

@@ -164,7 +164,7 @@
         { label: 'Ingresos', data: {{ tendencia.ingresos|tojson }}, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,.15)', tension: .3, fill: true },
         { label: 'Gastos', data: {{ tendencia.gastos|tojson }}, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.15)', tension: .3, fill: true }
       ] },
-    options: { plugins: { legend: { labels: { color: '#9aa' } } }, scales: { x: { ticks: { color:'#9aa' } }, y: { ticks: { color:'#9aa' } } } }
+    options: { plugins: { legend: { labels: { color: finChartColor() } } }, scales: { x: { ticks: { color: finChartColor() }, grid: { color: finGridColor() } }, y: { ticks: { color: finChartColor() }, grid: { color: finGridColor() } } } }
   });
   {% endif %}
   {% if distribucion_pie.labels %}

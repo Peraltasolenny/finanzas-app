@@ -78,7 +78,7 @@
     type: 'doughnut',
     data: { labels: {{ comp_chart.labels|tojson }}, datasets: [{ data: {{ comp_chart.valores|tojson }},
       backgroundColor: ['#7c5cff','#22c55e','#06b6d4','#f59e0b','#ec4899','#8b5cf6','#14b8a6','#64748b'] }] },
-    options: { plugins: { legend: { position: 'right', labels: { color:'#9aa', boxWidth:12 } } } }
+    options: finPieOptions()
   });
 </script>
 {% endif %}

@@ -19,12 +19,23 @@
   <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script>
+    // Color de texto de los gráficos según el tema (claro/oscuro).
+    function finChartColor() {
+      return document.documentElement.getAttribute('data-bs-theme') === 'light'
+        ? '#334155' : '#e5e7eb';
+    }
+    function finGridColor() {
+      return document.documentElement.getAttribute('data-bs-theme') === 'light'
+        ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)';
+    }
+    if (window.Chart) { Chart.defaults.color = finChartColor(); }
+
     // Opciones de gráficos circulares: muestra el % en la leyenda y el tooltip.
     // Definido en <head> para estar disponible cuando corren los scripts de cada página.
     function finPieOptions() {
       return {
         plugins: {
-          legend: { position: 'right', labels: { color: '#9aa', boxWidth: 12,
+          legend: { position: 'right', labels: { color: finChartColor(), boxWidth: 12,
             generateLabels: function (chart) {
               var d = chart.data, ds = d.datasets[0];
               var total = ds.data.reduce(function (a, b) { return a + b; }, 0);
