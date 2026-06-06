@@ -125,6 +125,29 @@
     try { localStorage.setItem('fin-theme', next); } catch (e) {}
   }
 
+  // Opciones para gráficos circulares: muestra el % en la leyenda y el tooltip.
+  function finPieOptions() {
+    return {
+      plugins: {
+        legend: { position: 'right', labels: { color: '#9aa', boxWidth: 12,
+          generateLabels: function (chart) {
+            var d = chart.data, ds = d.datasets[0];
+            var total = ds.data.reduce(function (a, b) { return a + b; }, 0);
+            return d.labels.map(function (l, i) {
+              var v = ds.data[i], pct = total ? (v / total * 100).toFixed(1) : 0;
+              return { text: l + ' (' + pct + '%)', fillStyle: ds.backgroundColor[i],
+                       strokeStyle: ds.backgroundColor[i], index: i };
+            });
+          } } },
+        tooltip: { callbacks: { label: function (ctx) {
+          var total = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+          var pct = total ? (ctx.parsed / total * 100).toFixed(1) : 0;
+          return ' ' + ctx.label + ': ' + ctx.parsed.toLocaleString() + ' (' + pct + '%)';
+        } } }
+      }
+    };
+  }
+
   // Vincular bancos: al elegir un banco registrado, prellena la tasa anual si está vacía.
   var finBancos = {{ bancos_data|tojson }};
   document.addEventListener('change', function (e) {

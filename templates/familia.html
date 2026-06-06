@@ -39,7 +39,7 @@
   <div class="col-lg-5">
     <div class="card shadow-sm mb-3"><div class="card-body">
       <h5 class="card-title mb-3">{{ fam.name }} — miembros</h5>
-      <table class="table table-sm align-middle">
+      <div class="table-responsive"><table class="table table-sm align-middle">
         <tbody>
         {% for r in resumen %}
           <tr>
@@ -59,7 +59,7 @@
           </tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
       {% if es_dueno %}
       <form method="post" action="{{ url_for('v2.agregar_miembro') }}" class="row g-2 align-items-end mt-1">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -116,13 +116,13 @@
           </div>
           <div class="small">Saldo: <strong>{{ money(ci.saldo) }}</strong></div>
           {% if ci.txs %}
-          <table class="table table-sm mb-0 mt-1"><tbody>
+          <div class="table-responsive"><table class="table table-sm mb-0 mt-1"><tbody>
             {% for t in ci.txs %}
             <tr><td class="small">{{ t.tx_date.strftime('%d/%m') }}</td>
               <td class="small text-muted">{{ t.description or (t.category.name if t.category else '—') }}</td>
               <td class="small text-end {{ 'txt-in' if t.type=='income' else 'txt-out' }}">{{ money(t.amount, t.currency) }}</td></tr>
             {% endfor %}
-          </tbody></table>
+          </tbody></table></div>
           {% else %}<div class="small text-muted">Sin movimientos.</div>{% endif %}
         </div>
       {% else %}

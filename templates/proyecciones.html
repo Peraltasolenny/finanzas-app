@@ -61,7 +61,7 @@
   <div class="col-lg-7">
     <div class="card shadow-sm h-100"><div class="card-body">
       <h5 class="card-title mb-3">Histórico (6 meses)</h5>
-      <table class="table table-sm align-middle">
+      <div class="table-responsive"><table class="table table-sm align-middle">
         <thead><tr><th>Mes</th><th class="text-end">Ingresos</th><th class="text-end">Gastos</th><th class="text-end">Neto</th></tr></thead>
         <tbody>
         {% for m in meses_data %}
@@ -73,21 +73,21 @@
           </tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
     </div></div>
   </div>
   <div class="col-lg-5">
     <div class="card shadow-sm h-100"><div class="card-body">
       <h5 class="card-title mb-3">Patrimonio proyectado</h5>
       <p class="text-muted small">Si mantienes tu ahorro promedio, partiendo de tu patrimonio actual de <strong>{{ money(nw.patrimonio) }}</strong>:</p>
-      <table class="table table-sm align-middle">
+      <div class="table-responsive"><table class="table table-sm align-middle">
         <tbody>
         {% for p in proy %}
           <tr><td>En {{ p.meses }} meses</td>
               <td class="text-end fw-bold {{ 'txt-net' if p.patrimonio >= 0 else 'txt-out' }}">{{ money(p.patrimonio) }}</td></tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
       <p class="text-muted small mb-0">Estimación lineal simple basada en tu ahorro mensual promedio. No considera intereses ni cambios de ingreso.</p>
     </div></div>
   </div>

@@ -116,7 +116,7 @@
     <div class="card shadow-sm h-100"><div class="card-body">
       <h5 class="card-title mb-3">Presupuestado vs. real</h5>
       {% if filas_presupuesto %}
-      <table class="table table-sm align-middle">
+      <div class="table-responsive"><table class="table table-sm align-middle">
         <thead><tr><th>Categoría</th><th class="text-end">Presup.</th><th class="text-end">Real</th><th style="width:35%">Avance</th></tr></thead>
         <tbody>
         {% for f in filas_presupuesto %}
@@ -128,7 +128,7 @@
             {% else %}<span class="text-muted small">sin presupuesto</span>{% endif %}</td></tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
       {% else %}<p class="text-muted">Sin gastos ni presupuesto en este periodo.</p>{% endif %}
     </div></div>
   </div>
@@ -172,7 +172,7 @@
     type: 'doughnut',
     data: { labels: {{ distribucion_pie.labels|tojson }},
       datasets: [{ data: {{ distribucion_pie.valores|tojson }}, backgroundColor: finPalette }] },
-    options: { plugins: { legend: { position: 'right', labels: { color: '#9aa', boxWidth: 12 } } } }
+    options: finPieOptions()
   });
   {% endif %}
 </script>

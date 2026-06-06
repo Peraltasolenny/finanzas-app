@@ -44,23 +44,23 @@
     <div class="row g-3">
       <div class="col-md-6"><div class="card shadow-sm h-100"><div class="card-body">
         <h6 class="text-muted">Plan original</h6>
-        <table class="table table-sm align-middle mb-0">
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
           <tr><td>Cuota mensual</td><td class="text-end fw-bold">{{ money(base_sim.cuota) }}</td></tr>
           <tr><td>Plazo</td><td class="text-end">{{ base_sim.meses }} meses</td></tr>
           <tr><td>Total a pagar</td><td class="text-end">{{ money(base_sim.total_pagado) }}</td></tr>
           <tr><td>Total intereses</td><td class="text-end txt-out">{{ money(base_sim.total_interes) }}</td></tr>
-        </table>
+        </table></div>
       </div></div></div>
 
       <div class="col-md-6"><div class="card shadow-sm h-100"><div class="card-body">
         <h6 class="text-muted">Con pago extra {% if extra %}(+{{ money(extra) }} · {{ freqs_extra.get(freq, 'mensual')|lower }}){% endif %}</h6>
         {% if extra_sim and not extra_sim.no_amortiza %}
-        <table class="table table-sm align-middle mb-0">
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0">
           <tr><td>Cuota + extra</td><td class="text-end fw-bold">{{ money(extra_sim.cuota + extra) }}</td></tr>
           <tr><td>Plazo</td><td class="text-end">{{ extra_sim.meses }} meses</td></tr>
           <tr><td>Total a pagar</td><td class="text-end">{{ money(extra_sim.total_pagado) }}</td></tr>
           <tr><td>Total intereses</td><td class="text-end txt-out">{{ money(extra_sim.total_interes) }}</td></tr>
-        </table>
+        </table></div>
         {% else %}<p class="text-muted">Ingresa un pago extra mensual para comparar.</p>{% endif %}
       </div></div></div>
     </div>

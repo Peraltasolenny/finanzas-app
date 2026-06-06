@@ -52,7 +52,7 @@
     <div class="card shadow-sm"><div class="card-body">
       <h5 class="card-title mb-3">Desglose mensual</h5>
       {% if desglose.bruto > 0 %}
-      <table class="table align-middle">
+      <div class="table-responsive"><table class="table align-middle">
         <tbody>
           <tr><td>Salario bruto</td><td class="text-end fw-bold txt-in">{{ money(desglose.bruto) }}</td></tr>
           {% for l in desglose.lineas %}
@@ -64,7 +64,7 @@
           <tr><td class="fw-bold fs-5">Salario neto</td>
               <td class="text-end fw-bold fs-5 txt-net">{{ money(desglose.neto) }}</td></tr>
         </tbody>
-      </table>
+      </table></div>
       <div class="row g-3 mt-1">
         <div class="col-6"><div class="card kpi"><div class="card-body py-2">
           <div class="kpi-label">ISR mensual</div><div class="fw-bold txt-out">{{ money(desglose.isr_mensual) }}</div>

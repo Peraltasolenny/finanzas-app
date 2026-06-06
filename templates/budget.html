@@ -10,7 +10,7 @@
   <p class="text-muted small">Define cuánto piensas gastar en cada categoría este mes. En el resumen verás cómo vas contra lo real.</p>
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <table class="table table-sm align-middle">
+    <div class="table-responsive"><table class="table table-sm align-middle">
       <thead><tr><th>Categoría</th><th style="width:30%">Monto presupuestado</th></tr></thead>
       <tbody>
       {% for c in categorias %}
@@ -47,7 +47,7 @@
       {% endfor %}
       </tbody>
       <tfoot><tr class="fw-bold"><td>Total presupuestado</td><td>{{ money(total) }}</td></tr></tfoot>
-    </table>
+    </table></div>
     <div class="d-flex gap-2 flex-wrap">
       <button class="btn btn-dark">Guardar presupuesto</button>
       <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#guardarTpl">Guardar como plantilla</button>
