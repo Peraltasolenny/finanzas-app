@@ -11,9 +11,9 @@
     <tbody>
     {% for banco, d in nw.por_banco.items() %}
       <tr>
-        <td class="fw-semibold">{{ banco }}</td>
-        <td class="text-end txt-in">{{ money(d.activo) }}</td>
-        <td class="text-end txt-out">{{ money(d.pasivo) }}</td>
+        <td class="fw-semibold">{% if banco != 'Sin banco' %}<a href="{{ url_for('main.transactions', banco=banco) }}">{{ banco }}</a>{% else %}{{ banco }}{% endif %}</td>
+        <td class="text-end txt-in"><a class="text-decoration-none txt-in" href="{{ url_for('v2.patrimonio', tipo='activo') }}">{{ money(d.activo) }}</a></td>
+        <td class="text-end txt-out"><a class="text-decoration-none txt-out" href="{{ url_for('v2.patrimonio', tipo='pasivo') }}">{{ money(d.pasivo) }}</a></td>
         <td class="text-end fw-bold">{{ money(d.activo - d.pasivo) }}</td>
       </tr>
     {% else %}
@@ -21,8 +21,9 @@
     {% endfor %}
     </tbody>
     <tfoot><tr class="fw-bold border-top">
-      <td>Total</td><td class="text-end txt-in">{{ money(nw.activos) }}</td>
-      <td class="text-end txt-out">{{ money(nw.pasivos) }}</td>
+      <td>Total</td>
+      <td class="text-end txt-in"><a class="text-decoration-none txt-in" href="{{ url_for('v2.patrimonio', tipo='activo') }}">{{ money(nw.activos) }}</a></td>
+      <td class="text-end txt-out"><a class="text-decoration-none txt-out" href="{{ url_for('v2.patrimonio', tipo='pasivo') }}">{{ money(nw.pasivos) }}</a></td>
       <td class="text-end">{{ money(nw.patrimonio) }}</td>
     </tr></tfoot>
   </table>
@@ -38,7 +39,7 @@
     <tbody>
     {% for banco, d in mov_banco.items() %}
       <tr>
-        <td class="fw-semibold">{{ banco }}</td>
+        <td class="fw-semibold">{% if banco != 'Sin banco' %}<a href="{{ url_for('main.transactions', banco=banco) }}">{{ banco }} →</a>{% else %}{{ banco }}{% endif %}</td>
         <td class="text-end txt-in">{{ money(d.ingresos) }}</td>
         <td class="text-end txt-out">{{ money(d.gastos) }}</td>
         <td class="text-end fw-bold {{ 'txt-net' if d.ingresos - d.gastos >= 0 else 'txt-out' }}">{{ money(d.ingresos - d.gastos) }}</td>

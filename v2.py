@@ -838,9 +838,17 @@ def patrimonio():
 
     rates = finance.get_rates(current_user)
     nw = finance.net_worth(current_user, rates)
+    tipo = request.args.get("tipo")  # 'activo' | 'pasivo' | None (todos)
     cuentas = Account.query.filter_by(user_id=uid, is_active=True).order_by(
         Account.kind, Account.name).all()
-    detalle = [{"a": a, "base_val": finance.to_base(a.balance, a.currency, current_user, rates)}
+    if tipo == "activo":
+        cuentas = [a for a in cuentas if a.kind not in LIABILITY_KINDS]
+    elif tipo == "pasivo":
+        cuentas = [a for a in cuentas if a.kind in LIABILITY_KINDS]
+    detalle = [{"a": a,
+                "base_val": (finance.liability_value(a, current_user, rates)
+                             if a.kind in LIABILITY_KINDS
+                             else finance.to_base(a.balance, a.currency, current_user, rates))}
                for a in cuentas]
 
     # Ratio de deuda y composición del patrimonio (activos por tipo).
@@ -853,7 +861,7 @@ def patrimonio():
     comp_items = sorted(composicion.items(), key=lambda x: -x[1])
     comp_chart = {"labels": [c[0] for c in comp_items], "valores": [round(c[1], 2) for c in comp_items]}
 
-    return render_template("patrimonio.html", nw=nw, detalle=detalle,
+    return render_template("patrimonio.html", nw=nw, detalle=detalle, tipo=tipo,
                            kind_labels=ACCOUNT_KINDS, base=current_user.settings.base_currency,
                            ratio_deuda=ratio_deuda, comp_chart=comp_chart,
                            monedas=reports_monedas_v2(current_user))
