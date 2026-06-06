@@ -18,6 +18,31 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script>
+    // Opciones de gráficos circulares: muestra el % en la leyenda y el tooltip.
+    // Definido en <head> para estar disponible cuando corren los scripts de cada página.
+    function finPieOptions() {
+      return {
+        plugins: {
+          legend: { position: 'right', labels: { color: '#9aa', boxWidth: 12,
+            generateLabels: function (chart) {
+              var d = chart.data, ds = d.datasets[0];
+              var total = ds.data.reduce(function (a, b) { return a + b; }, 0);
+              return d.labels.map(function (l, i) {
+                var v = ds.data[i], pct = total ? (v / total * 100).toFixed(1) : 0;
+                return { text: l + ' (' + pct + '%)', fillStyle: ds.backgroundColor[i],
+                         strokeStyle: ds.backgroundColor[i], index: i };
+              });
+            } } },
+          tooltip: { callbacks: { label: function (ctx) {
+            var total = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+            var pct = total ? (ctx.parsed / total * 100).toFixed(1) : 0;
+            return ' ' + ctx.label + ': ' + ctx.parsed.toLocaleString() + ' (' + pct + '%)';
+          } } }
+        }
+      };
+    }
+  </script>
 </head>
 <body>
 {% if current_user.is_authenticated %}
@@ -41,7 +66,7 @@
         </li>
         {# Movimientos #}
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['main.transactions','v2.por_banco','main.import_statement','main.categories','v2.recurrentes','v2.calendario'] }}" href="#" role="button" data-bs-toggle="dropdown">Movimientos</a>
+          <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['main.transactions','v2.por_banco','main.import_statement','v2.recurrentes','v2.calendario'] }}" href="#" role="button" data-bs-toggle="dropdown">Movimientos</a>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="{{ url_for('main.transactions') }}">Transacciones</a></li>
             <li><a class="dropdown-item" href="{{ url_for('v2.por_banco') }}">Por banco</a></li>
@@ -49,7 +74,6 @@
             <li><a class="dropdown-item" href="{{ url_for('v2.calendario') }}">Calendario</a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="{{ url_for('main.import_statement') }}">Importar estado de cuenta</a></li>
-            <li><a class="dropdown-item" href="{{ url_for('main.categories') }}">Categorías</a></li>
           </ul>
         </li>
         {# Productos #}
@@ -77,13 +101,19 @@
             <li><a class="dropdown-item" href="{{ url_for('v2.simulador') }}">Simulador de pagos</a></li>
           </ul>
         </li>
-        {# Familia #}
-        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'v2.familia' }}" href="{{ url_for('v2.familia') }}">Familia</a></li>
-        {# Configuración #}
-        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint in ['v2.configuracion','v2.nomina'] }}" href="{{ url_for('v2.configuracion') }}">Configuración</a></li>
-        {% if current_user.is_admin %}
-        <li class="nav-item"><a class="nav-link {{ 'active' if request.endpoint == 'auth.users' }}" href="{{ url_for('auth.users') }}">Usuarios</a></li>
-        {% endif %}
+        {# Configuración (con submenús) #}
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['v2.configuracion','v2.nomina','main.categories','v2.familia','auth.users'] }}" href="#" role="button" data-bs-toggle="dropdown">Configuración</a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="{{ url_for('v2.configuracion') }}">Ajustes generales</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.nomina') }}">Nómina e ISR</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('main.categories') }}">Categorías</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('v2.familia') }}">Familia</a></li>
+            {% if current_user.is_admin %}
+            <li><a class="dropdown-item" href="{{ url_for('auth.users') }}">Usuarios</a></li>
+            {% endif %}
+          </ul>
+        </li>
       </ul>
       <div class="d-flex align-items-center gap-2">
         <button type="button" class="theme-toggle" onclick="finToggleTheme()" title="Cambiar tema" aria-label="Cambiar tema">
@@ -123,29 +153,6 @@
     var next = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
     html.setAttribute('data-bs-theme', next);
     try { localStorage.setItem('fin-theme', next); } catch (e) {}
-  }
-
-  // Opciones para gráficos circulares: muestra el % en la leyenda y el tooltip.
-  function finPieOptions() {
-    return {
-      plugins: {
-        legend: { position: 'right', labels: { color: '#9aa', boxWidth: 12,
-          generateLabels: function (chart) {
-            var d = chart.data, ds = d.datasets[0];
-            var total = ds.data.reduce(function (a, b) { return a + b; }, 0);
-            return d.labels.map(function (l, i) {
-              var v = ds.data[i], pct = total ? (v / total * 100).toFixed(1) : 0;
-              return { text: l + ' (' + pct + '%)', fillStyle: ds.backgroundColor[i],
-                       strokeStyle: ds.backgroundColor[i], index: i };
-            });
-          } } },
-        tooltip: { callbacks: { label: function (ctx) {
-          var total = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0);
-          var pct = total ? (ctx.parsed / total * 100).toFixed(1) : 0;
-          return ' ' + ctx.label + ': ' + ctx.parsed.toLocaleString() + ' (' + pct + '%)';
-        } } }
-      }
-    };
   }
 
   // Vincular bancos: al elegir un banco registrado, prellena la tasa anual si está vacía.
