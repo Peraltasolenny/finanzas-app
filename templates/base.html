@@ -39,10 +39,11 @@
             generateLabels: function (chart) {
               var d = chart.data, ds = d.datasets[0];
               var total = ds.data.reduce(function (a, b) { return a + b; }, 0);
+              var col = finChartColor();
               return d.labels.map(function (l, i) {
                 var v = ds.data[i], pct = total ? (v / total * 100).toFixed(1) : 0;
                 return { text: l + ' (' + pct + '%)', fillStyle: ds.backgroundColor[i],
-                         strokeStyle: ds.backgroundColor[i], index: i };
+                         strokeStyle: ds.backgroundColor[i], fontColor: col, index: i };
               });
             } } },
           tooltip: { callbacks: { label: function (ctx) {
