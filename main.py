@@ -230,6 +230,7 @@ def transactions():
             )
             db.session.add(tx)
             db.session.flush()
+            finance.apply_account_effect(tx, +1)
             cb = finance.apply_cashback(current_user, tx)
             db.session.commit()
             msg = "Transacción registrada."
@@ -309,6 +310,12 @@ def edit_transaction(tx_id):
         return redirect(url_for("main.transactions"))
 
     if request.method == "POST":
+        # Revierte el efecto del estado anterior sobre el saldo de la cuenta.
+        from types import SimpleNamespace
+        old = SimpleNamespace(account_id=tx.account_id, amount=tx.amount, fee=tx.fee,
+                              type=tx.type, currency=tx.currency)
+        finance.apply_account_effect(old, -1)
+
         tx.type = request.form.get("type") if request.form.get("type") in ("income", "expense") else tx.type
         cat_id = request.form.get("category_id") or None
         acc_id = request.form.get("account_id") or None
@@ -324,6 +331,8 @@ def edit_transaction(tx_id):
         d = _parse_iso_date(request.form.get("tx_date"))
         if d:
             tx.tx_date = d
+        # Aplica el efecto del estado nuevo.
+        finance.apply_account_effect(tx, +1)
         db.session.commit()
         flash("Transacción actualizada.", "success")
         return redirect(url_for("main.transactions", year=tx.tx_date.year, month=tx.tx_date.month))
@@ -432,6 +441,7 @@ def import_confirm():
         )
         db.session.add(tx)
         db.session.flush()
+        finance.apply_account_effect(tx, +1)
         finance.apply_cashback(current_user, tx)
         count += 1
     db.session.commit()
@@ -445,6 +455,7 @@ def import_confirm():
 def delete_transaction(tx_id):
     tx = db.session.get(Transaction, tx_id)
     if tx and tx.user_id == current_user.id:
+        finance.apply_account_effect(tx, -1)   # revierte el efecto en el saldo
         db.session.delete(tx)
         db.session.commit()
         flash("Transacción eliminada.", "info")

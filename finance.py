@@ -246,6 +246,41 @@ def amortization(principal, annual_rate, months, extra=0.0, extra_interval=1):
     }
 
 
+# ----------------- efecto de transacciones sobre el saldo de la cuenta -----------------
+def _convert(amount, from_cur, to_cur, user, rates):
+    """Convierte un monto de una moneda a otra (vía la moneda base)."""
+    base = user.settings.base_currency
+    base_val = to_base(amount, from_cur, user, rates)
+    if not to_cur or to_cur == base:
+        return base_val
+    rate = rates.get(to_cur, 1.0)
+    return base_val / rate if rate else base_val
+
+
+def apply_account_effect(tx, sign=1, rates=None):
+    """Ajusta el saldo de la cuenta asociada según la transacción.
+
+    Solo aplica a cuentas tipo ACTIVO (efectivo, ahorro, corriente, inversión...).
+    Gasto → baja el saldo; ingreso → sube. sign=-1 revierte el efecto.
+    Las cuentas de pasivo (tarjetas/préstamos) se manejan con sus abonos, no aquí.
+    """
+    from models import Account, LIABILITY_KINDS
+    if not tx.account_id:
+        return
+    acc = db.session.get(Account, tx.account_id)
+    if not acc or acc.kind in LIABILITY_KINDS:
+        return
+    user = acc.user
+    rates = rates if rates is not None else get_rates(user)
+    fee = tx.fee or 0
+    if tx.type == "expense":
+        monto = _convert(tx.amount + fee, tx.currency, acc.currency, user, rates)
+        acc.balance -= sign * monto
+    else:
+        monto = _convert(tx.amount - fee, tx.currency, acc.currency, user, rates)
+        acc.balance += sign * monto
+
+
 # ----------------- cashback automático -----------------
 def apply_cashback(user, tx):
     """Si la transacción (gasto) coincide con una regla de cashback de su tarjeta,
