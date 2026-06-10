@@ -116,19 +116,8 @@
     <div class="card shadow-sm h-100"><div class="card-body">
       <h5 class="card-title mb-3">Presupuestado vs. real</h5>
       {% if filas_presupuesto %}
-      <div class="table-responsive"><table class="table table-sm align-middle">
-        <thead><tr><th>Categoría</th><th class="text-end">Presup.</th><th class="text-end">Real</th><th style="width:35%">Avance</th></tr></thead>
-        <tbody>
-        {% for f in filas_presupuesto %}
-          <tr><td class="fw-semibold">{{ f.nombre }}</td>
-            <td class="text-end">{{ money(f.presupuestado) }}</td>
-            <td class="text-end">{{ money(f.real) }}</td>
-            <td>{% if f.pct is not none %}{% set color = 'bg-success' if f.pct <= 80 else ('bg-warning' if f.pct <= 100 else 'bg-danger') %}
-              <div class="progress" style="height:18px"><div class="progress-bar {{ color }}" style="width: {{ [f.pct, 100]|min }}%">{{ '%.0f'|format(f.pct) }}%</div></div>
-            {% else %}<span class="text-muted small">sin presupuesto</span>{% endif %}</td></tr>
-        {% endfor %}
-        </tbody>
-      </table></div>
+        {% set chart_height = [filas_presupuesto|length * 38, 160]|max %}
+        <canvas id="chartBudget" style="max-height:{{ chart_height }}px"></canvas>
       {% else %}<p class="text-muted">Sin gastos ni presupuesto en este periodo.</p>{% endif %}
     </div></div>
   </div>
@@ -173,6 +162,29 @@
     data: { labels: {{ distribucion_pie.labels|tojson }},
       datasets: [{ data: {{ distribucion_pie.valores|tojson }}, backgroundColor: finPalette }] },
     options: finPieOptions()
+  });
+  {% endif %}
+  {% if filas_presupuesto %}
+  new Chart(document.getElementById('chartBudget'), {
+    type: 'bar',
+    data: {
+      labels: {{ filas_presupuesto|map(attribute='nombre')|list|tojson }},
+      datasets: [
+        { label: 'Presupuestado', data: {{ filas_presupuesto|map(attribute='presupuestado')|list|tojson }},
+          backgroundColor: 'rgba(124,92,255,.55)', borderColor: '#7c5cff', borderWidth: 1 },
+        { label: 'Real', data: {{ filas_presupuesto|map(attribute='real')|list|tojson }},
+          backgroundColor: 'rgba(239,68,68,.6)', borderColor: '#ef4444', borderWidth: 1 }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: { legend: { labels: { color: finChartColor(), boxWidth: 12 } } },
+      scales: {
+        x: { ticks: { color: finChartColor() }, grid: { color: finGridColor() } },
+        y: { ticks: { color: finChartColor() }, grid: { color: finGridColor() } }
+      }
+    }
   });
   {% endif %}
 </script>

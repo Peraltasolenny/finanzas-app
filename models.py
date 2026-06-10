@@ -482,6 +482,15 @@ class DebtPayment(db.Model):
     account = db.relationship("Account")
 
 
+class GmailToken(db.Model):
+    """Almacena el token OAuth de Gmail por usuario (JSON cifrado con Fernet)."""
+    __tablename__ = "gmail_tokens"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
+    token_json = db.Column(db.Text, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 # Categorías por defecto, ahora con cubeta (need/want/invest) sugerida.
 DEFAULT_CATEGORIES = [
     # Ingresos (sin cubeta)

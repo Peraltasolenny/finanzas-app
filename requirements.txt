@@ -36,6 +36,17 @@ cryptography==48.0.0
 cffi==2.0.0
 pycparser==3.0
 
+# --- Gmail OAuth (importar correos bancarios) ---
+google-auth==2.53.0
+google-auth-oauthlib==1.4.0
+google-api-python-client==2.197.0
+httplib2==0.22.0
+uritemplate==4.1.1
+pyasn1==0.6.1
+pyasn1-modules==0.4.1
+rsa==4.9.1
+cachetools==5.5.2
+
 # --- Utilidades transitivas ---
 packaging==26.2
 typing_extensions==4.15.0

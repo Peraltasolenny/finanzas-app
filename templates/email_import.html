@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Importar desde correo{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h4 class="mb-0 page-title">Importar desde correo bancario</h4>
+</div>
+
+{# Estado de conexión Gmail #}
+<div class="card shadow-sm mb-3"><div class="card-body">
+  <div class="d-flex align-items-center gap-3 flex-wrap">
+    <div>
+      <h6 class="mb-1">Gmail</h6>
+      {% if connected %}
+        <span class="badge text-bg-success">Conectado</span>
+      {% else %}
+        <span class="badge text-bg-secondary">No conectado</span>
+      {% endif %}
+    </div>
+    <div class="ms-auto d-flex gap-2 flex-wrap">
+      {% if connected %}
+        <a class="btn btn-primary btn-sm" href="{{ url_for('email_import.gmail_fetch') }}">
+          🔄 Buscar consumos (últimos 30 días)
+        </a>
+        <form method="post" action="{{ url_for('email_import.gmail_disconnect') }}"
+              onsubmit="return confirm('¿Desconectar Gmail?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-outline-danger btn-sm">Desconectar</button>
+        </form>
+      {% elif google_configured %}
+        <a class="btn btn-dark btn-sm" href="{{ url_for('email_import.gmail_connect') }}">
+          Conectar con Gmail
+        </a>
+      {% else %}
+        <span class="text-muted small">
+          Para conectar Gmail agrega <code>GOOGLE_CLIENT_ID</code> y
+          <code>GOOGLE_CLIENT_SECRET</code> a tu archivo <code>.env</code>.
+          <a href="#instrucciones" class="ms-1">Ver instrucciones</a>
+        </span>
+      {% endif %}
+    </div>
+  </div>
+</div></div>
+
+{# Resultados parseados #}
+{% if parsed %}
+<div class="card shadow-sm mb-3"><div class="card-body">
+  <h5 class="card-title mb-3">Transacciones detectadas ({{ parsed|length }})</h5>
+  <form method="post" action="{{ url_for('email_import.confirm_email_import') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="txs_json" value="{{ parsed|tojson }}">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="selAll" onchange="document.querySelectorAll('.sel-tx').forEach(c=>c.checked=this.checked)"></th>
+            <th>Fecha</th><th>Descripción</th><th class="text-end">Monto</th>
+            <th>Cuenta</th><th>Categoría</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in parsed %}
+          <tr>
+            <td><input class="sel-tx form-check-input" type="checkbox" name="sel" value="{{ loop.index0 }}" checked></td>
+            <td class="small">{{ t.tx_date }}</td>
+            <td>
+              <input type="text" name="desc_{{ loop.index0 }}" class="form-control form-control-sm"
+                     value="{{ t.description }}" style="min-width:140px">
+              {% if t.email_subject is defined %}
+                <div class="text-muted" style="font-size:.7rem">{{ t.email_subject[:60] }}</div>
+              {% endif %}
+            </td>
+            <td class="text-end fw-bold txt-out small">{{ t.currency }} {{ '%.2f'|format(t.amount) }}</td>
+            <td>
+              <select name="account_{{ loop.index0 }}" class="form-select form-select-sm" style="min-width:130px">
+                <option value="">(ninguna)</option>
+                {% for a in accounts %}
+                  <option value="{{ a.id }}"
+                    {% if a.kind == 'tarjeta' %}selected{% endif %}>
+                    {{ a.name }}{% if a.bank %} · {{ a.bank }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <select name="category_{{ loop.index0 }}" class="form-select form-select-sm" style="min-width:130px">
+                <option value="">(ninguna)</option>
+                {% for c in categorias %}
+                  <option value="{{ c.id }}">{{ c.name }}</option>
+                {% endfor %}
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <button class="btn btn-dark">Importar seleccionadas</button>
+  </form>
+</div></div>
+{% endif %}
+
+{# Opción: pegar texto del correo #}
+<div class="card shadow-sm mb-3"><div class="card-body">
+  <h5 class="card-title mb-2">Pegar texto del correo</h5>
+  <p class="text-muted small mb-2">
+    Si no quieres conectar Gmail, copia el cuerpo del correo de notificación
+    de tu banco y pégalo aquí. Soporta BHD León, Banco Popular, Qik, BDI y
+    formatos similares.
+  </p>
+  <form method="post" action="{{ url_for('email_import.paste_email') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <textarea name="texto" class="form-control mb-2" rows="6"
+              placeholder="Pega aquí el texto del correo de tu banco...">{{ texto_pegado or '' }}</textarea>
+    <button class="btn btn-dark btn-sm">Detectar transacciones</button>
+  </form>
+</div></div>
+
+{# Instrucciones Gmail OAuth #}
+<div class="card shadow-sm" id="instrucciones"><div class="card-body">
+  <h5 class="card-title mb-2">Cómo configurar Gmail OAuth</h5>
+  <ol class="small text-muted mb-0">
+    <li>Ve a <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a> y crea un proyecto.</li>
+    <li>Activa la <strong>Gmail API</strong> en "APIs y servicios → Biblioteca".</li>
+    <li>En "APIs y servicios → Credenciales" crea credenciales de tipo <strong>ID de cliente OAuth</strong> (aplicación web).</li>
+    <li>Agrega como URI de redirección autorizada: <code>{{ request.host_url }}importar/correo/callback</code></li>
+    <li>Copia el <strong>ID de cliente</strong> y <strong>Secreto</strong> y agrégalos a tu <code>.env</code>:
+      <pre class="mt-1 mb-0 p-2 rounded" style="background:var(--bs-body-bg)">GOOGLE_CLIENT_ID=tu_client_id
+GOOGLE_CLIENT_SECRET=tu_client_secret</pre>
+    </li>
+    <li>Reinicia el servidor y vuelve a esta página.</li>
+  </ol>
+</div></div>
+{% endblock %}
