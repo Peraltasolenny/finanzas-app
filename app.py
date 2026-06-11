@@ -18,9 +18,11 @@ def create_app(config_class=Config):
     from auth import auth_bp
     from main import main_bp
     from v2 import v2_bp
+    from email_import import email_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(v2_bp)
+    app.register_blueprint(email_bp)
 
     # Formato de moneda disponible en todas las plantillas
     @app.context_processor

@@ -3,7 +3,7 @@ proyecciones, recurrentes y nómina/ISR."""
 import calendar as _cal
 from datetime import date, datetime
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import extract, func
 
@@ -554,6 +554,59 @@ def abonar_producto(acc_id):
     db.session.commit()
     flash(f"Abono registrado. Nuevo saldo: {a.balance:,.2f}. Se reflejó en tu presupuesto.", "success")
     return redirect(request.referrer or url_for("v2.tarjetas"))
+
+
+# ----------------- API TARJETA RESUMEN -----------------
+@v2_bp.route("/api/tarjeta/<int:acc_id>/resumen")
+@login_required
+def api_tarjeta_resumen(acc_id):
+    from datetime import timedelta
+    card = _owned_account(acc_id)
+    if not card:
+        return jsonify({"error": "not found"}), 404
+
+    hoy = date.today()
+    inicio = hoy - timedelta(days=30)
+
+    txs = Transaction.query.filter(
+        Transaction.user_id == current_user.id,
+        Transaction.account_id == acc_id,
+        Transaction.type == "expense",
+        Transaction.tx_date >= inicio,
+    ).all()
+
+    by_cat: dict = {}
+    for t in txs:
+        nombre = t.category.name if t.category else "Sin categoría"
+        if nombre not in by_cat:
+            by_cat[nombre] = {"total": 0.0, "count": 0}
+        by_cat[nombre]["total"] += t.amount
+        by_cat[nombre]["count"] += 1
+
+    cats = sorted(
+        [{"nombre": k, "total": round(v["total"], 2), "count": v["count"]} for k, v in by_cat.items()],
+        key=lambda x: -x["total"],
+    )
+
+    return jsonify({
+        "id": card.id,
+        "nombre": card.name,
+        "banco": card.bank or "",
+        "saldo": round(card.balance, 2),
+        "moneda": card.currency,
+        "limite": round(card.credit_limit or 0, 2),
+        "disponible": round(card.available_credit or 0, 2),
+        "utilizacion": card.utilization,
+        "minimo": round(card.minimum_payment or 0, 2),
+        "corte": card.cutoff_day,
+        "pago": card.due_day,
+        "tasa": card.interest_rate,
+        "beneficio": card.benefit_detail or "",
+        "tipo_beneficio": card.benefit_type,
+        "categorias": cats,
+        "total_30d": round(sum(t.amount for t in txs), 2),
+        "count_30d": len(txs),
+    })
 
 
 # ----------------- POR BANCO -----------------

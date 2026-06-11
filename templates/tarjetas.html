@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ titulo }}{% endblock %}
 {% block content %}
+{% include '_productos_nav.html' %}
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
   <h4 class="mb-0 page-title">{{ titulo }}</h4>
   <button class="btn btn-dark btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#formTarjeta">+ Agregar tarjeta</button>
@@ -66,47 +67,141 @@
 </div></div>
 {% endif %}
 
-{# Lista de tarjetas #}
+{# Lista de tarjetas – clic en la tarjeta abre el resumen, los botones siguen funcionando #}
 {% for c in cuentas %}
-<div class="card shadow-sm mb-2 {{ 'opacity-50' if not c.is_active }}"><div class="card-body">
-  <div class="d-flex justify-content-between align-items-start">
-    <div>
-      <h6 class="mb-1">{{ c.name }}
-        {% if c.bank %}<span class="badge text-bg-light text-dark">{{ c.bank }}</span>{% endif %}
-        {% if c.benefit_type != 'none' %}<span class="badge text-bg-success">{{ 'Cashback' if c.benefit_type=='cashback' else 'Millas' }}{% if c.benefit_detail %}: {{ c.benefit_detail }}{% endif %}</span>{% endif %}
-        {% if c.has_terminal %}<span class="badge text-bg-secondary">Terminal</span>{% endif %}
-      </h6>
-      <div class="small text-muted">
-        Saldo: <strong class="txt-out">{{ money(c.balance, c.currency) }}</strong>
-        {% if c.credit_limit %} · Límite: {{ money(c.credit_limit, c.currency) }} · Disponible: {{ money(c.available_credit, c.currency) }}{% endif %}
+<div class="card shadow-sm mb-2 {{ 'opacity-50' if not c.is_active }} tarjeta-clicable"
+     data-acc-id="{{ c.id }}" style="cursor:pointer" title="Clic para ver resumen">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <h6 class="mb-1">{{ c.name }}
+          {% if c.bank %}<span class="badge text-bg-light text-dark">{{ c.bank }}</span>{% endif %}
+          {% if c.benefit_type != 'none' %}<span class="badge text-bg-success">{{ 'Cashback' if c.benefit_type=='cashback' else 'Millas' }}{% if c.benefit_detail %}: {{ c.benefit_detail }}{% endif %}</span>{% endif %}
+          {% if c.has_terminal %}<span class="badge text-bg-secondary">Terminal</span>{% endif %}
+        </h6>
+        <div class="small text-muted">
+          Saldo: <strong class="txt-out">{{ money(c.balance, c.currency) }}</strong>
+          {% if c.credit_limit %} · Límite: {{ money(c.credit_limit, c.currency) }} · Disponible: {{ money(c.available_credit, c.currency) }}{% endif %}
+        </div>
+        <div class="small text-muted">
+          {% if c.minimum_payment %}Mínimo: {{ money(c.minimum_payment, c.currency) }}{% endif %}
+          {% if c.cutoff_day %} · corte día {{ c.cutoff_day }}{% endif %}
+          {% if c.due_day %} · pago día {{ c.due_day }}{% endif %}
+          {% if c.interest_rate %} · {{ '%.1f'|format(c.interest_rate) }}% anual{% endif %}
+        </div>
       </div>
-      <div class="small text-muted">
-        {% if c.minimum_payment %}Mínimo: {{ money(c.minimum_payment, c.currency) }}{% endif %}
-        {% if c.cutoff_day %} · corte día {{ c.cutoff_day }}{% endif %}
-        {% if c.due_day %} · pago día {{ c.due_day }}{% endif %}
-        {% if c.interest_rate %} · {{ '%.1f'|format(c.interest_rate) }}% anual{% endif %}
+      <div class="d-inline-flex gap-1 tarjeta-acciones">
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.transactions', cuenta=c.id) }}">Movimientos</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('v2.tarjeta_detalle', acc_id=c.id) }}">Gestionar</a>
+        <form method="post" action="{{ url_for('v2.eliminar_producto', acc_id=c.id) }}" onsubmit="return confirm('¿Eliminar esta tarjeta?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-danger">Eliminar</button>
+        </form>
       </div>
     </div>
-    <div class="d-inline-flex gap-1">
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.transactions', cuenta=c.id) }}">Movimientos</a>
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('v2.tarjeta_detalle', acc_id=c.id) }}">Gestionar</a>
-      <form method="post" action="{{ url_for('v2.eliminar_producto', acc_id=c.id) }}" onsubmit="return confirm('¿Eliminar esta tarjeta?')">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-sm btn-outline-danger">Eliminar</button>
-      </form>
-    </div>
+    {% if c.utilization is not none %}
+      {% set ucolor = 'bg-success' if c.utilization <= 30 else ('bg-warning' if c.utilization <= 50 else 'bg-danger') %}
+      <div class="progress mt-2" style="height:14px"><div class="progress-bar {{ ucolor }}" style="width: {{ [c.utilization, 100]|min }}%">{{ c.utilization }}%</div></div>
+    {% endif %}
+    <form method="post" action="{{ url_for('v2.abonar_producto', acc_id=c.id) }}" class="d-flex gap-2 mt-2 tarjeta-acciones">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="number" step="0.01" min="0" name="amount" class="form-control form-control-sm" placeholder="Registrar abono">
+      <button class="btn btn-sm btn-success">Abonar</button>
+    </form>
   </div>
-  {% if c.utilization is not none %}
-    {% set ucolor = 'bg-success' if c.utilization <= 30 else ('bg-warning' if c.utilization <= 50 else 'bg-danger') %}
-    <div class="progress mt-2" style="height:14px"><div class="progress-bar {{ ucolor }}" style="width: {{ [c.utilization, 100]|min }}%">{{ c.utilization }}%</div></div>
-  {% endif %}
-  <form method="post" action="{{ url_for('v2.abonar_producto', acc_id=c.id) }}" class="d-flex gap-2 mt-2">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="number" step="0.01" min="0" name="amount" class="form-control form-control-sm" placeholder="Registrar abono">
-    <button class="btn btn-sm btn-success">Abonar</button>
-  </form>
-</div></div>
+</div>
 {% else %}
   <p class="text-muted">Aún no tienes tarjetas. Usa "+ Agregar tarjeta". 👆</p>
 {% endfor %}
+
+{# Modal: resumen de tarjeta #}
+<div class="modal fade" id="modalTarjeta" tabindex="-1" aria-labelledby="modalTarjetaTitulo" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTarjetaTitulo">Resumen de tarjeta</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="modalTarjetaBody">
+        <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function fmtNum(n) {
+  return Number(n).toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+document.querySelectorAll('.tarjeta-clicable').forEach(function(card) {
+  card.addEventListener('click', function(e) {
+    if (e.target.closest('button, a, input, form, select')) return;
+    var accId = card.dataset.accId;
+    var modal = new bootstrap.Modal(document.getElementById('modalTarjeta'));
+    var body = document.getElementById('modalTarjetaBody');
+    var titulo = document.getElementById('modalTarjetaTitulo');
+    body.innerHTML = '<div class="text-center py-4"><div class="spinner-border" role="status"></div></div>';
+    modal.show();
+
+    fetch('/api/tarjeta/' + accId + '/resumen')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        titulo.textContent = d.nombre + (d.banco ? ' · ' + d.banco : '');
+        var util = d.utilizacion !== null ? d.utilizacion : null;
+        var utilColor = util === null ? '' : (util <= 30 ? 'txt-in' : (util <= 50 ? 'text-warning' : 'txt-out'));
+        var utilBar = util === null ? '' : '<div class="progress mt-1" style="height:8px">' +
+          '<div class="progress-bar ' + (util <= 30 ? 'bg-success' : (util <= 50 ? 'bg-warning' : 'bg-danger')) +
+          '" style="width:' + Math.min(util, 100) + '%"></div></div>';
+
+        var html = '<div class="row g-3 mb-3">' +
+          '<div class="col-6 col-md-3"><div class="text-muted small">Saldo actual</div>' +
+          '<div class="fw-bold txt-out">' + d.moneda + ' ' + fmtNum(d.saldo) + '</div></div>';
+
+        if (d.limite > 0) {
+          html += '<div class="col-6 col-md-3"><div class="text-muted small">Límite</div>' +
+            '<div class="fw-bold">' + d.moneda + ' ' + fmtNum(d.limite) + '</div></div>' +
+            '<div class="col-6 col-md-3"><div class="text-muted small">Disponible</div>' +
+            '<div class="fw-bold txt-in">' + d.moneda + ' ' + fmtNum(d.disponible) + '</div></div>' +
+            '<div class="col-6 col-md-3"><div class="text-muted small">Utilización</div>' +
+            '<div class="fw-bold ' + utilColor + '">' + (util !== null ? util + '%' : '—') + '</div>' + utilBar + '</div>';
+        }
+        html += '</div>';
+
+        html += '<div class="row g-2 mb-3 text-muted small">';
+        if (d.minimo > 0) html += '<div class="col-auto">Mínimo: <strong>' + d.moneda + ' ' + fmtNum(d.minimo) + '</strong></div>';
+        if (d.corte)       html += '<div class="col-auto">Corte: día <strong>' + d.corte + '</strong></div>';
+        if (d.pago)        html += '<div class="col-auto">Pago: día <strong>' + d.pago + '</strong></div>';
+        if (d.tasa)        html += '<div class="col-auto">Tasa: <strong>' + d.tasa.toFixed(1) + '% anual</strong></div>';
+        if (d.beneficio)   html += '<div class="col-auto">Beneficio: <strong>' + d.beneficio + '</strong></div>';
+        html += '</div>';
+
+        if (d.categorias.length > 0) {
+          html += '<h6 class="border-top pt-3 mb-2">Gastos últimos 30 días <span class="badge text-bg-secondary">' +
+            d.moneda + ' ' + fmtNum(d.total_30d) + ' · ' + d.count_30d + ' transacciones</span></h6>';
+          html += '<div class="table-responsive"><table class="table table-sm align-middle">' +
+            '<thead><tr><th>Categoría</th><th class="text-end">Total</th><th class="text-end">Txns</th><th style="width:30%">%</th></tr></thead><tbody>';
+          d.categorias.forEach(function(c) {
+            var pct = d.total_30d > 0 ? Math.round(c.total / d.total_30d * 100) : 0;
+            html += '<tr><td>' + c.nombre + '</td><td class="text-end">' + d.moneda + ' ' + fmtNum(c.total) +
+              '</td><td class="text-end">' + c.count +
+              '</td><td><div class="progress" style="height:12px"><div class="progress-bar" style="width:' + pct +
+              '%">' + pct + '%</div></div></td></tr>';
+          });
+          html += '</tbody></table></div>';
+        } else {
+          html += '<p class="text-muted border-top pt-3">Sin gastos en los últimos 30 días.</p>';
+        }
+
+        body.innerHTML = html;
+      })
+      .catch(function() {
+        body.innerHTML = '<p class="text-danger">No se pudo cargar el resumen.</p>';
+      });
+  });
+});
+</script>
 {% endblock %}

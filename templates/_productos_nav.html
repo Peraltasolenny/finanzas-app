@@ -1,0 +1,33 @@
+{# Nav de tabs para moverse entre tipos de productos sin menú #}
+<div class="overflow-auto mb-3" style="white-space:nowrap; -webkit-overflow-scrolling:touch;">
+  <ul class="nav nav-pills flex-nowrap d-inline-flex gap-1">
+    <li class="nav-item">
+      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.cuentas' }}"
+         href="{{ url_for('v2.cuentas') }}">Cuentas</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.tarjetas' }}"
+         href="{{ url_for('v2.tarjetas') }}">Tarjetas</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.prestamos' }}"
+         href="{{ url_for('v2.prestamos') }}">Préstamos</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.inversiones' }}"
+         href="{{ url_for('v2.inversiones') }}">Inversiones</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.complementarias' }}"
+         href="{{ url_for('v2.complementarias') }}">Complementaria</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.certificados' }}"
+         href="{{ url_for('v2.certificados') }}">Certificados</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.corretaje' }}"
+         href="{{ url_for('v2.corretaje') }}">Corretaje</a>
+    </li>
+  </ul>
+</div>
