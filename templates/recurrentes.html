@@ -38,7 +38,7 @@
           <input type="text" name="description" class="form-control" placeholder="Ej. Netflix"></div>
         <button class="btn btn-dark w-100">Crear regla</button>
       </form>
-      <p class="text-muted small mt-3 mb-0">Puedes editar una ocurrencia puntual sin afectar las siguientes — usa el botón <strong>Editar esta fecha</strong> en cada regla.</p>
+      <p class="text-muted small mt-3 mb-0">Edita una ocurrencia puntual (futura o aplicada) sin afectar las demás.</p>
     </div></div>
   </div>
 
@@ -47,8 +47,9 @@
       <h5 class="card-title mb-3">Reglas activas</h5>
       {% for r in reglas %}
         <div class="border rounded p-3 mb-3 {{ 'opacity-50' if not r.is_active }}">
-          {# Encabezado de la regla #}
-          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+
+          {# Encabezado #}
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
             <div>
               <div class="fw-semibold">{{ r.description or (r.category.name if r.category else '—') }}</div>
               <div class="small text-muted">
@@ -60,11 +61,11 @@
             <div class="fw-bold {{ 'txt-in' if r.type=='income' else 'txt-out' }}">{{ money(r.amount, r.currency) }}</div>
           </div>
 
-          {# Próximas ocurrencias con botón de editar puntual #}
+          {# Próximas ocurrencias: editar una futura puntualmente #}
           {% set fechas = proximas.get(r.id, []) %}
-          {% if fechas %}
-            <div class="mt-2">
-              <div class="text-muted small mb-1">Próximas fechas — clic para editar solo esa ocurrencia:</div>
+          {% if fechas and r.is_active %}
+            <div class="mb-2">
+              <div class="text-muted small mb-1">Próximas — editar solo esa fecha:</div>
               <div class="d-flex flex-wrap gap-1">
                 {% for f in fechas %}
                   <form method="post" action="{{ url_for('v2.generar_ocurrencia', rule_id=r.id) }}" class="d-inline">
@@ -78,14 +79,30 @@
                 {% endfor %}
               </div>
             </div>
-          {% elif not r.is_active %}
-            <div class="small text-muted mt-1">Regla pausada</div>
-          {% else %}
-            <div class="small text-muted mt-1">Sin próximas fechas (verifica fecha de fin)</div>
+          {% endif %}
+
+          {# Transacciones ya aplicadas: editar una pasada #}
+          {% set txs_ap = aplicadas.get(r.id, []) %}
+          {% if txs_ap %}
+            <div class="mb-2">
+              <div class="text-muted small mb-1">Aplicadas — clic para editar:</div>
+              <div class="d-flex flex-wrap gap-1">
+                {% for t in txs_ap %}
+                  <a href="{{ url_for('main.edit_transaction', tx_id=t.id) }}"
+                     class="btn btn-sm btn-outline-secondary"
+                     title="Editar esta transacción generada ({{ money(t.amount, t.currency) }})">
+                    {{ t.tx_date.strftime('%d/%m/%Y') }}
+                    <span class="small {{ 'txt-in' if t.type=='income' else 'txt-out' }}">
+                      {{ money(t.amount, t.currency) }}
+                    </span>
+                  </a>
+                {% endfor %}
+              </div>
+            </div>
           {% endif %}
 
           {# Acciones de la regla #}
-          <div class="d-flex gap-1 mt-2 flex-wrap">
+          <div class="d-flex gap-1 mt-2 flex-wrap border-top pt-2">
             <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('v2.editar_recurrente', rule_id=r.id) }}">Editar regla</a>
             <form method="post" action="{{ url_for('v2.toggle_recurrente', rule_id=r.id) }}" class="d-inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

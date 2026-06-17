@@ -220,24 +220,17 @@ def generar_recurrencias_nomina():
     creadas = 0
     for d in dias:
         start = date(hoy.year, hoy.month, min(d, 28))
-        # Ingreso (salario) de esta partida.
+        # Ingreso = salario NETO (lo que llega al banco tras AFP, SFS e ISR).
         db.session.add(RecurringRule(
             user_id=uid, type="income", category_id=cat_sal.id, account_id=account_id,
-            amount=round(desglose["bruto"] / parts, 2), currency=base,
-            description="[Nómina] Salario", frequency="monthly", day_of_month=d,
+            amount=round(desglose["neto"] / parts, 2), currency=base,
+            description="[Nómina] Salario neto", frequency="monthly", day_of_month=d,
             start_date=start, next_date=start, source="payroll"))
         creadas += 1
-        # Deducciones de esta partida (cada una como gasto).
-        for line in desglose["lineas"]:
-            db.session.add(RecurringRule(
-                user_id=uid, type="expense", category_id=cat_ded.id, account_id=account_id,
-                amount=round(line["amount"] / parts, 2), currency=base, bucket="need",
-                description=f"[Nómina] {line['name']}", frequency="monthly", day_of_month=d,
-                start_date=start, next_date=start, source="payroll"))
-            creadas += 1
     db.session.commit()
-    flash(f"Se generaron {creadas} recurrencias de nómina ({parts} partida(s) al mes). "
-          f"Míralas y edítalas en Recurrentes.", "success")
+    neto_fmt = f"{base} {desglose['neto']:,.2f}"
+    flash(f"Recurrencia de nómina generada: {neto_fmt} neto/mes ({parts} partida(s)). "
+          f"Las deducciones (AFP, SFS, ISR) se ven en el detalle de /nómina.", "success")
     return redirect(url_for("v2.nomina"))
 
 
@@ -818,9 +811,16 @@ def recurrentes():
     freqs = {"weekly": "Semanal", "biweekly": "Quincenal", "monthly": "Mensual", "yearly": "Anual"}
     # Próximas ocurrencias por regla (para poder editar individualmente).
     proximas = {r.id: finance.proximas_ocurrencias(r, n=4) for r in reglas}
+    # Últimas transacciones ya generadas por regla (para editar aplicadas).
+    aplicadas = {}
+    for r in reglas:
+        txs_rec = Transaction.query.filter_by(
+            user_id=uid, recurring_rule_id=r.id,
+        ).order_by(Transaction.tx_date.desc()).limit(4).all()
+        aplicadas[r.id] = txs_rec
     return render_template("recurrentes.html", reglas=reglas, categorias=categorias,
                            accounts=accounts, freqs=freqs, hoy=date.today().isoformat(),
-                           proximas=proximas)
+                           proximas=proximas, aplicadas=aplicadas)
 
 
 @v2_bp.route("/calendario")
