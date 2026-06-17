@@ -560,23 +560,69 @@ def abonar_producto(acc_id):
 @v2_bp.route("/api/tarjeta/<int:acc_id>/resumen")
 @login_required
 def api_tarjeta_resumen(acc_id):
+    import calendar as _cal_mod
     from datetime import timedelta
     card = _owned_account(acc_id)
     if not card:
         return jsonify({"error": "not found"}), 404
 
     hoy = date.today()
-    inicio = hoy - timedelta(days=30)
 
-    txs = Transaction.query.filter(
+    # Período de corte actual: desde el último día de corte hasta hoy.
+    if card.cutoff_day:
+        # Determina inicio del período actual (último día de corte).
+        if hoy.day >= card.cutoff_day:
+            inicio_periodo = date(hoy.year, hoy.month, card.cutoff_day)
+        else:
+            # El corte fue el mes pasado.
+            prev_m = hoy.month - 1 if hoy.month > 1 else 12
+            prev_y = hoy.year if hoy.month > 1 else hoy.year - 1
+            last_day = _cal_mod.monthrange(prev_y, prev_m)[1]
+            inicio_periodo = date(prev_y, prev_m, min(card.cutoff_day, last_day))
+        # Próximo corte.
+        if hoy.day < card.cutoff_day:
+            proximo_corte = date(hoy.year, hoy.month, card.cutoff_day)
+        else:
+            next_m = hoy.month + 1 if hoy.month < 12 else 1
+            next_y = hoy.year if hoy.month < 12 else hoy.year + 1
+            last_day = _cal_mod.monthrange(next_y, next_m)[1]
+            proximo_corte = date(next_y, next_m, min(card.cutoff_day, last_day))
+        dias_corte = (proximo_corte - hoy).days
+    else:
+        inicio_periodo = hoy - timedelta(days=30)
+        proximo_corte = None
+        dias_corte = None
+
+    # Próxima fecha de pago.
+    if card.due_day:
+        if hoy.day <= card.due_day:
+            proximo_pago = date(hoy.year, hoy.month, card.due_day)
+        else:
+            next_m = hoy.month + 1 if hoy.month < 12 else 1
+            next_y = hoy.year if hoy.month < 12 else hoy.year + 1
+            last_day = _cal_mod.monthrange(next_y, next_m)[1]
+            proximo_pago = date(next_y, next_m, min(card.due_day, last_day))
+        dias_pago = (proximo_pago - hoy).days
+    else:
+        proximo_pago = None
+        dias_pago = None
+
+    # Transacciones del período de corte actual.
+    txs_periodo = Transaction.query.filter(
         Transaction.user_id == current_user.id,
         Transaction.account_id == acc_id,
         Transaction.type == "expense",
-        Transaction.tx_date >= inicio,
-    ).all()
+        Transaction.tx_date >= inicio_periodo,
+    ).order_by(Transaction.tx_date.desc()).all()
+
+    # También las últimas 5 transacciones (cualquier tipo) para el historial.
+    ultimas = Transaction.query.filter(
+        Transaction.user_id == current_user.id,
+        Transaction.account_id == acc_id,
+    ).order_by(Transaction.tx_date.desc()).limit(5).all()
 
     by_cat: dict = {}
-    for t in txs:
+    for t in txs_periodo:
         nombre = t.category.name if t.category else "Sin categoría"
         if nombre not in by_cat:
             by_cat[nombre] = {"total": 0.0, "count": 0}
@@ -604,8 +650,22 @@ def api_tarjeta_resumen(acc_id):
         "beneficio": card.benefit_detail or "",
         "tipo_beneficio": card.benefit_type,
         "categorias": cats,
-        "total_30d": round(sum(t.amount for t in txs), 2),
-        "count_30d": len(txs),
+        "total_periodo": round(sum(t.amount for t in txs_periodo), 2),
+        "count_periodo": len(txs_periodo),
+        "inicio_periodo": inicio_periodo.strftime("%d/%m/%Y"),
+        "proximo_corte": proximo_corte.strftime("%d/%m/%Y") if proximo_corte else None,
+        "dias_corte": dias_corte,
+        "proximo_pago": proximo_pago.strftime("%d/%m/%Y") if proximo_pago else None,
+        "dias_pago": dias_pago,
+        "ultimas": [
+            {
+                "fecha": t.tx_date.strftime("%d/%m"),
+                "desc": t.description or t.merchant or "—",
+                "tipo": t.type,
+                "monto": round(t.amount, 2),
+            }
+            for t in ultimas
+        ],
     })
 
 
@@ -756,8 +816,11 @@ def recurrentes():
         Category.type, Category.name).all()
     accounts = Account.query.filter_by(user_id=uid, is_active=True).order_by(Account.name).all()
     freqs = {"weekly": "Semanal", "biweekly": "Quincenal", "monthly": "Mensual", "yearly": "Anual"}
+    # Próximas ocurrencias por regla (para poder editar individualmente).
+    proximas = {r.id: finance.proximas_ocurrencias(r, n=4) for r in reglas}
     return render_template("recurrentes.html", reglas=reglas, categorias=categorias,
-                           accounts=accounts, freqs=freqs, hoy=date.today().isoformat())
+                           accounts=accounts, freqs=freqs, hoy=date.today().isoformat(),
+                           proximas=proximas)
 
 
 @v2_bp.route("/calendario")
@@ -848,6 +911,41 @@ def editar_recurrente(rule_id):
     freqs = {"weekly": "Semanal", "biweekly": "Quincenal", "monthly": "Mensual", "yearly": "Anual"}
     return render_template("recurrente_edit.html", r=r, categorias=categorias,
                            accounts=accounts, freqs=freqs)
+
+
+@v2_bp.route("/recurrentes/<int:rule_id>/ocurrencia", methods=["POST"])
+@login_required
+def generar_ocurrencia(rule_id):
+    """Pre-genera una ocurrencia puntual de la regla para editarla sin afectar las demás."""
+    r = db.session.get(RecurringRule, rule_id)
+    if not r or r.user_id != current_user.id:
+        flash("Regla no encontrada.", "danger")
+        return redirect(url_for("v2.recurrentes"))
+    fecha_str = request.form.get("fecha", "")
+    try:
+        from datetime import datetime as _dt
+        fecha = _dt.strptime(fecha_str, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        flash("Fecha inválida.", "danger")
+        return redirect(url_for("v2.recurrentes"))
+
+    # Si ya existe una transacción para esa regla y fecha, edítala directamente.
+    existing = Transaction.query.filter_by(
+        user_id=current_user.id, recurring_rule_id=r.id, tx_date=fecha,
+    ).first()
+    if not existing:
+        existing = Transaction(
+            user_id=current_user.id, type=r.type, category_id=r.category_id,
+            account_id=r.account_id, amount=r.amount, currency=r.currency,
+            description=r.description or "(recurrente)", tx_date=fecha,
+            bucket=r.bucket, recurring_rule_id=r.id,
+        )
+        db.session.add(existing)
+        # Si la fecha pre-generada coincide con next_date, avanza next_date.
+        if r.next_date and r.next_date == fecha:
+            r.next_date = finance._advance(fecha, r.frequency, r.day_of_month)
+        db.session.commit()
+    return redirect(url_for("main.edit_transaction", tx_id=existing.id))
 
 
 @v2_bp.route("/recurrentes/<int:rule_id>/toggle", methods=["POST"])

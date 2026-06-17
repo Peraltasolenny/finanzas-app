@@ -120,29 +120,54 @@ def generate_due_transactions(user, today=None):
     """Materializa las transacciones recurrentes vencidas hasta hoy.
 
     Cada transacción generada queda independiente: editarla no afecta la regla.
+    Salta fechas que ya tienen una transacción pre-generada (ocurrencias editadas).
     Devuelve cuántas se crearon.
     """
     today = today or date.today()
     creadas = 0
     rules = RecurringRule.query.filter_by(user_id=user.id, is_active=True).all()
+
+    # Pre-carga las combinaciones (rule_id, tx_date) ya existentes para evitar duplicados.
+    ya_existentes = set()
+    rule_ids = [r.id for r in rules]
+    if rule_ids:
+        for t in Transaction.query.filter(
+            Transaction.user_id == user.id,
+            Transaction.recurring_rule_id.in_(rule_ids),
+        ).with_entities(Transaction.recurring_rule_id, Transaction.tx_date).all():
+            ya_existentes.add((t.recurring_rule_id, t.tx_date))
+
     for rule in rules:
         nxt = rule.next_date or rule.start_date
-        # Genera todas las ocurrencias vencidas (con tope de seguridad).
         guard = 0
         while nxt and nxt <= today and (rule.end_date is None or nxt <= rule.end_date) and guard < 600:
-            db.session.add(Transaction(
-                user_id=user.id, type=rule.type, category_id=rule.category_id,
-                account_id=rule.account_id, amount=rule.amount, currency=rule.currency,
-                description=rule.description or "(recurrente)", tx_date=nxt,
-                bucket=rule.bucket, recurring_rule_id=rule.id,
-            ))
-            creadas += 1
+            if (rule.id, nxt) not in ya_existentes:
+                db.session.add(Transaction(
+                    user_id=user.id, type=rule.type, category_id=rule.category_id,
+                    account_id=rule.account_id, amount=rule.amount, currency=rule.currency,
+                    description=rule.description or "(recurrente)", tx_date=nxt,
+                    bucket=rule.bucket, recurring_rule_id=rule.id,
+                ))
+                ya_existentes.add((rule.id, nxt))
+                creadas += 1
             guard += 1
             nxt = _advance(nxt, rule.frequency, rule.day_of_month)
         rule.next_date = nxt
     if creadas:
         db.session.commit()
     return creadas
+
+
+def proximas_ocurrencias(rule, n=3):
+    """Devuelve las próximas n fechas de una regla recurrente (sin generar transacciones)."""
+    fechas = []
+    d = rule.next_date or rule.start_date
+    guard = 0
+    while d and len(fechas) < n and (rule.end_date is None or d <= rule.end_date) and guard < 200:
+        fechas.append(d)
+        d = _advance(d, rule.frequency, rule.day_of_month)
+        guard += 1
+    return fechas
 
 
 # ----------------- salud financiera (necesidades / gustos / inversión) -----------------

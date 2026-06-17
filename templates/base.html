@@ -146,7 +146,7 @@
   {% for nb in bancos_nombres %}<option value="{{ nb }}"></option>{% endfor %}
 </datalist>
 
-<div class="container pb-5">
+<div class="container pb-5" id="page-content">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}
       <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">

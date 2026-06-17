@@ -1,33 +1,103 @@
-{# Nav de tabs para moverse entre tipos de productos sin menú #}
-<div class="overflow-auto mb-3" style="white-space:nowrap; -webkit-overflow-scrolling:touch;">
-  <ul class="nav nav-pills flex-nowrap d-inline-flex gap-1">
+{# Tabs de productos: navega entre tipos sin recargar la página (AJAX + pushState) #}
+<div class="overflow-auto mb-3" style="white-space:nowrap; -webkit-overflow-scrolling:touch;" id="productos-nav-wrap">
+  <ul class="nav nav-pills flex-nowrap d-inline-flex gap-1" id="productos-nav-pills">
     <li class="nav-item">
-      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.cuentas' }}"
+      <a class="nav-link py-1 px-3 prod-tab {{ 'active' if request.endpoint == 'v2.cuentas' }}"
          href="{{ url_for('v2.cuentas') }}">Cuentas</a>
     </li>
     <li class="nav-item">
-      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.tarjetas' }}"
+      <a class="nav-link py-1 px-3 prod-tab {{ 'active' if request.endpoint == 'v2.tarjetas' }}"
          href="{{ url_for('v2.tarjetas') }}">Tarjetas</a>
     </li>
     <li class="nav-item">
-      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.prestamos' }}"
+      <a class="nav-link py-1 px-3 prod-tab {{ 'active' if request.endpoint == 'v2.prestamos' }}"
          href="{{ url_for('v2.prestamos') }}">Préstamos</a>
     </li>
     <li class="nav-item">
-      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.inversiones' }}"
+      <a class="nav-link py-1 px-3 prod-tab {{ 'active' if request.endpoint == 'v2.inversiones' }}"
          href="{{ url_for('v2.inversiones') }}">Inversiones</a>
     </li>
     <li class="nav-item">
-      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.complementarias' }}"
+      <a class="nav-link py-1 px-3 prod-tab {{ 'active' if request.endpoint == 'v2.complementarias' }}"
          href="{{ url_for('v2.complementarias') }}">Complementaria</a>
     </li>
     <li class="nav-item">
-      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.certificados' }}"
+      <a class="nav-link py-1 px-3 prod-tab {{ 'active' if request.endpoint == 'v2.certificados' }}"
          href="{{ url_for('v2.certificados') }}">Certificados</a>
     </li>
     <li class="nav-item">
-      <a class="nav-link py-1 px-3 {{ 'active' if request.endpoint == 'v2.corretaje' }}"
+      <a class="nav-link py-1 px-3 prod-tab {{ 'active' if request.endpoint == 'v2.corretaje' }}"
          href="{{ url_for('v2.corretaje') }}">Corretaje</a>
     </li>
   </ul>
 </div>
+
+<script>
+(function () {
+  // Carga el contenido de una URL del tab via AJAX sin recargar la página.
+  function loadTab(url, pushState) {
+    var content = document.getElementById('page-content');
+    if (!content) return;
+
+    // Fade-out rápido.
+    content.style.transition = 'opacity 0.12s';
+    content.style.opacity = '0.3';
+
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(html, 'text/html');
+        var newContent = doc.getElementById('page-content');
+        if (!newContent) { window.location.href = url; return; }
+
+        content.innerHTML = newContent.innerHTML;
+
+        // Re-ejecuta los <script> del contenido nuevo.
+        content.querySelectorAll('script').forEach(function (old) {
+          var s = document.createElement('script');
+          Array.from(old.attributes).forEach(function (a) { s.setAttribute(a.name, a.value); });
+          s.textContent = old.textContent;
+          old.parentNode.replaceChild(s, old);
+        });
+
+        // Actualiza el título de la página.
+        var newTitle = doc.querySelector('title');
+        if (newTitle) document.title = newTitle.textContent;
+
+        // Actualiza estado activo de los tabs (en los nuevos y en los existentes).
+        document.querySelectorAll('.prod-tab').forEach(function (link) {
+          var linkUrl = link.href.split('?')[0];
+          var targetUrl = url.split('?')[0];
+          link.classList.toggle('active', linkUrl === targetUrl);
+        });
+
+        if (pushState) history.pushState({ prodUrl: url }, '', url);
+
+        // Fade-in.
+        content.style.opacity = '1';
+      })
+      .catch(function () {
+        // Si falla el AJAX, navega normal.
+        window.location.href = url;
+      });
+  }
+
+  // Intercepta clic en tabs de productos.
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest('.prod-tab');
+    if (!link) return;
+    e.preventDefault();
+    var url = link.href;
+    if (url === window.location.href) return;
+    loadTab(url, true);
+  });
+
+  // Maneja el botón Atrás/Adelante del navegador.
+  window.addEventListener('popstate', function (e) {
+    if (e.state && e.state.prodUrl) {
+      loadTab(e.state.prodUrl, false);
+    }
+  });
+})();
+</script>

@@ -67,6 +67,13 @@
 </div></div>
 {% endif %}
 
+{# Acceso rápido a importación de correos bancarios #}
+<div class="d-flex justify-content-end mb-2">
+  <a href="{{ url_for('email_import.email_import_page') }}" class="btn btn-sm btn-outline-secondary">
+    📧 Importar consumos desde correo
+  </a>
+</div>
+
 {# Lista de tarjetas – clic en la tarjeta abre el resumen, los botones siguen funcionando #}
 {% for c in cuentas %}
 <div class="card shadow-sm mb-2 {{ 'opacity-50' if not c.is_active }} tarjeta-clicable"
@@ -126,6 +133,8 @@
         <div class="text-center py-4"><div class="spinner-border" role="status"></div></div>
       </div>
       <div class="modal-footer">
+        <a id="btnCorreoModal" href="{{ url_for('email_import.email_import_page') }}"
+           class="btn btn-outline-secondary btn-sm me-auto">📧 Buscar en correo</a>
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
       </div>
     </div>
@@ -157,10 +166,10 @@ document.querySelectorAll('.tarjeta-clicable').forEach(function(card) {
           '<div class="progress-bar ' + (util <= 30 ? 'bg-success' : (util <= 50 ? 'bg-warning' : 'bg-danger')) +
           '" style="width:' + Math.min(util, 100) + '%"></div></div>';
 
-        var html = '<div class="row g-3 mb-3">' +
+        // KPIs principales
+        var html = '<div class="row g-2 mb-3">' +
           '<div class="col-6 col-md-3"><div class="text-muted small">Saldo actual</div>' +
           '<div class="fw-bold txt-out">' + d.moneda + ' ' + fmtNum(d.saldo) + '</div></div>';
-
         if (d.limite > 0) {
           html += '<div class="col-6 col-md-3"><div class="text-muted small">Límite</div>' +
             '<div class="fw-bold">' + d.moneda + ' ' + fmtNum(d.limite) + '</div></div>' +
@@ -171,29 +180,48 @@ document.querySelectorAll('.tarjeta-clicable').forEach(function(card) {
         }
         html += '</div>';
 
+        // Fechas y detalles
         html += '<div class="row g-2 mb-3 text-muted small">';
-        if (d.minimo > 0) html += '<div class="col-auto">Mínimo: <strong>' + d.moneda + ' ' + fmtNum(d.minimo) + '</strong></div>';
-        if (d.corte)       html += '<div class="col-auto">Corte: día <strong>' + d.corte + '</strong></div>';
-        if (d.pago)        html += '<div class="col-auto">Pago: día <strong>' + d.pago + '</strong></div>';
-        if (d.tasa)        html += '<div class="col-auto">Tasa: <strong>' + d.tasa.toFixed(1) + '% anual</strong></div>';
-        if (d.beneficio)   html += '<div class="col-auto">Beneficio: <strong>' + d.beneficio + '</strong></div>';
+        if (d.minimo > 0) html += '<div class="col-auto">Mínimo: <strong class="text-body">' + d.moneda + ' ' + fmtNum(d.minimo) + '</strong></div>';
+        if (d.proximo_corte) html += '<div class="col-auto">Próximo corte: <strong class="text-body">' + d.proximo_corte +
+          (d.dias_corte !== null ? ' <span class="badge text-bg-warning">' + d.dias_corte + ' días</span>' : '') + '</strong></div>';
+        if (d.proximo_pago) html += '<div class="col-auto">Próximo pago: <strong class="text-body">' + d.proximo_pago +
+          (d.dias_pago !== null ? ' <span class="badge ' + (d.dias_pago <= 5 ? 'text-bg-danger' : 'text-bg-secondary') + '">' + d.dias_pago + ' días</span>' : '') + '</strong></div>';
+        if (d.tasa)    html += '<div class="col-auto">Tasa: <strong class="text-body">' + d.tasa.toFixed(1) + '% anual</strong></div>';
+        if (d.beneficio) html += '<div class="col-auto">Beneficio: <strong class="text-body">' + d.beneficio + '</strong></div>';
         html += '</div>';
 
+        // Gastos del período de corte actual por categoría
+        var tituloPeriodo = d.inicio_periodo ? 'Gastos del período (' + d.inicio_periodo + ' – hoy)' : 'Gastos del período';
         if (d.categorias.length > 0) {
-          html += '<h6 class="border-top pt-3 mb-2">Gastos últimos 30 días <span class="badge text-bg-secondary">' +
-            d.moneda + ' ' + fmtNum(d.total_30d) + ' · ' + d.count_30d + ' transacciones</span></h6>';
+          html += '<h6 class="border-top pt-3 mb-2">' + tituloPeriodo +
+            ' <span class="badge text-bg-secondary">' + d.moneda + ' ' + fmtNum(d.total_periodo) +
+            ' · ' + d.count_periodo + ' txns</span></h6>';
           html += '<div class="table-responsive"><table class="table table-sm align-middle">' +
-            '<thead><tr><th>Categoría</th><th class="text-end">Total</th><th class="text-end">Txns</th><th style="width:30%">%</th></tr></thead><tbody>';
+            '<thead><tr><th>Categoría</th><th class="text-end">Total</th><th class="text-end">#</th><th style="width:28%">%</th></tr></thead><tbody>';
           d.categorias.forEach(function(c) {
-            var pct = d.total_30d > 0 ? Math.round(c.total / d.total_30d * 100) : 0;
-            html += '<tr><td>' + c.nombre + '</td><td class="text-end">' + d.moneda + ' ' + fmtNum(c.total) +
-              '</td><td class="text-end">' + c.count +
-              '</td><td><div class="progress" style="height:12px"><div class="progress-bar" style="width:' + pct +
-              '%">' + pct + '%</div></div></td></tr>';
+            var pct = d.total_periodo > 0 ? Math.round(c.total / d.total_periodo * 100) : 0;
+            html += '<tr><td>' + c.nombre + '</td><td class="text-end fw-semibold">' + d.moneda + ' ' + fmtNum(c.total) +
+              '</td><td class="text-end text-muted">' + c.count +
+              '</td><td><div class="progress" style="height:10px"><div class="progress-bar" style="width:' + pct +
+              '%"></div></div><div class="small text-muted">' + pct + '%</div></td></tr>';
           });
           html += '</tbody></table></div>';
         } else {
-          html += '<p class="text-muted border-top pt-3">Sin gastos en los últimos 30 días.</p>';
+          html += '<p class="text-muted border-top pt-3">' + tituloPeriodo + ': sin gastos registrados.</p>';
+        }
+
+        // Últimas 5 transacciones
+        if (d.ultimas && d.ultimas.length > 0) {
+          html += '<h6 class="border-top pt-3 mb-2">Últimas transacciones</h6>';
+          html += '<div class="table-responsive"><table class="table table-sm align-middle">' +
+            '<thead><tr><th>Fecha</th><th>Descripción</th><th class="text-end">Monto</th></tr></thead><tbody>';
+          d.ultimas.forEach(function(t) {
+            html += '<tr><td class="text-muted small">' + t.fecha + '</td><td class="small">' + t.desc +
+              '</td><td class="text-end fw-semibold ' + (t.tipo === 'income' ? 'txt-in' : 'txt-out') + '">' +
+              d.moneda + ' ' + fmtNum(t.monto) + '</td></tr>';
+          });
+          html += '</tbody></table></div>';
         }
 
         body.innerHTML = html;
